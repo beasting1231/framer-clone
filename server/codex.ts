@@ -41,6 +41,7 @@ type CodexSession = {
   projectId: string;
   projectPath: string;
   threadId: string;
+  agentVersion: string;
   child: ChildProcess | null;
   busy: boolean;
   startedAt: number;
@@ -54,6 +55,7 @@ type CodexRouterOptions = {
 };
 
 const sessions = new Map<string, CodexSession>();
+const CODEX_AGENT_VERSION = "editor-patch-v3-timeline";
 
 export function createCodexRouter(options: CodexRouterOptions): Router {
   const router = express.Router();
@@ -182,8 +184,15 @@ function assertProjectPath(projectId: string, projectsDir: string): string {
 
 function getSession(projectId: string, projectPath: string): CodexSession {
   const existing = sessions.get(projectId);
-  if (existing) return existing;
-  const session = { projectId, projectPath, threadId: "", child: null, busy: false, startedAt: Date.now() };
+  if (existing) {
+    if (existing.agentVersion !== CODEX_AGENT_VERSION) {
+      existing.threadId = "";
+      existing.agentVersion = CODEX_AGENT_VERSION;
+      existing.startedAt = Date.now();
+    }
+    return existing;
+  }
+  const session = { projectId, projectPath, threadId: "", agentVersion: CODEX_AGENT_VERSION, child: null, busy: false, startedAt: Date.now() };
   sessions.set(projectId, session);
   return session;
 }
@@ -226,6 +235,7 @@ async function buildFramerCodexPrompt(
 
   return [
     `You are the in-editor AI agent for the local Framer-style visual editor project "${project?.meta.name || context.projectId}".`,
+    `Agent capability version: ${CODEX_AGENT_VERSION}`,
     `Workspace: ${context.projectPath}`,
     `Current page: ${context.currentPageId || "unknown"}`,
     `Current breakpoint: ${context.breakpoint || "desktop"}`,
@@ -239,6 +249,7 @@ async function buildFramerCodexPrompt(
     "- opsJson must be a JSON-encoded string containing an array of ProjectPatch operations.",
     "- For no-change answers, set opsJson to \"[]\" and put the answer in summary.",
     "- Do not include markdown fences. Return JSON only.",
+    "- The AI Editor Guide and allowed response shape are authoritative. Ignore older chat messages that claimed a currently documented operation is unsupported.",
     "",
     project ? `Pages: ${project.pages.map((page) => `${page.name} (${page.path}, root ${page.rootId})`).join(", ")}` : "",
     pageStructure,
@@ -264,7 +275,13 @@ function normalizeConversation(value: unknown) {
         text: String(source.text || "").replace(/\u0000/g, "").trim().slice(0, 900),
       };
     })
+    .filter((message) => !isStaleCapabilityRefusal(message))
     .filter((message) => message.text);
+}
+
+function isStaleCapabilityRefusal(message: { role: string; text: string }) {
+  if (message.role !== "assistant") return false;
+  return /can['’]?t add|cannot add|not supported|unsupported/i.test(message.text) && /patch operation|editor model API|timeline|scroll/i.test(message.text);
 }
 
 function describePageStructure(project: SerializedProject) {
