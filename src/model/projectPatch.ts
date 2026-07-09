@@ -35,6 +35,54 @@ const SIZE_MODES = new Set(["fixed", "fill", "relative", "fit", "viewport"]);
 const TAGS = new Set(["div", "section", "nav", "header", "footer", "main", "article", "aside", "button", "form", "input", "textarea"]);
 const TEXT_TAGS = new Set(["p", "h1", "h2", "h3", "h4", "h5", "h6", "span", "blockquote", "code"]);
 const NODE_FIELD_KEYS = new Set(["name", "tag", "textTag", "alt", "placeholder", "inputType", "link"]);
+const STYLE_KEYS = new Set<keyof StyleProps>([
+  "width",
+  "height",
+  "minWidth",
+  "maxWidth",
+  "minHeight",
+  "maxHeight",
+  "x",
+  "y",
+  "positionAbsolute",
+  "pin",
+  "sticky",
+  "stickyOffset",
+  "zIndex",
+  "rotation",
+  "layout",
+  "direction",
+  "gap",
+  "wrap",
+  "align",
+  "justify",
+  "padding",
+  "gridColumns",
+  "gridMinItemWidth",
+  "gridAutoFit",
+  "fill",
+  "border",
+  "radius",
+  "shadows",
+  "opacity",
+  "blur",
+  "backdropBlur",
+  "overflow",
+  "visible",
+  "cursor",
+  "fontFamily",
+  "fontSize",
+  "fontWeight",
+  "fontStyle",
+  "lineHeight",
+  "letterSpacing",
+  "color",
+  "colorStyleId",
+  "textStyleId",
+  "textAlign",
+  "textTransform",
+  "textDecoration",
+]);
 
 export function parseProjectPatch(text: string): ProjectPatch {
   const trimmed = text.trim();
@@ -210,7 +258,16 @@ export function applyProjectPatch(project: SerializedProject, patch: ProjectPatc
   const after = validateProject(next);
   if (!after.ok) throw new Error(`Patch would make project invalid: ${after.errors.join(" ")}`);
   next.meta.updatedAt = new Date().toISOString();
-  return { project: next, changedNodeIds: [...changed], summary: patch.summary || "Applied AI patch." };
+  return { project: next, changedNodeIds: [...changed], summary: summarizePatchOps(patch) };
+}
+
+function summarizePatchOps(patch: ProjectPatch) {
+  if (patch.ops.length === 0) return patch.summary || "No project changes were needed.";
+  const counts = new Map<string, number>();
+  for (const op of patch.ops) counts.set(op.op, (counts.get(op.op) ?? 0) + 1);
+  return `Applied ${patch.ops.length} validated editor change${patch.ops.length === 1 ? "" : "s"}: ${[...counts.entries()]
+    .map(([op, count]) => `${count} ${op}`)
+    .join(", ")}.`;
 }
 
 function assertPatch(value: unknown): asserts value is ProjectPatch {
@@ -246,6 +303,9 @@ function validateNode(node: Node, errors: string[]) {
 }
 
 function validateStylePatch(styles: Partial<StyleProps>) {
+  for (const key of Object.keys(styles)) {
+    if (!STYLE_KEYS.has(key as keyof StyleProps)) throw new Error(`Unsupported style property ${key}. Use project StyleProps, not raw CSS.`);
+  }
   if (styles.layout && !LAYOUTS.has(styles.layout)) throw new Error(`Invalid layout ${styles.layout}.`);
   for (const key of ["width", "height"] as const) {
     const size = styles[key];

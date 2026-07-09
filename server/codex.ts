@@ -249,6 +249,8 @@ async function buildFramerCodexPrompt(
     "- Use section-pricing for pricing sections, section-contact for contact forms, and section-footer for footers.",
     "- setText only targets text nodes.",
     "- setStyles uses desktop/tablet/phone and StyleProps keys from the project model.",
+    "- Never use raw CSS keys like background, backgroundImage, margin, or className. Unsupported style keys are rejected.",
+    "- For gradient backgrounds, set styles.fill to {\"type\":\"linear\",\"angle\":135,\"stops\":[{\"color\":\"#0F172A\",\"position\":0},{\"color\":\"#D97706\",\"position\":1}]} or a radial fill. Do not use CSS background strings.",
     "- insertTemplate uses existing insert-tab TemplateId values.",
     "- For requests like below/after/above/before an existing section, use insertTemplateRelative with the section node as anchorNodeId.",
     "- Root children are ordered top-to-bottom in the page. Do not infer order from the layer panel if it appears reversed.",

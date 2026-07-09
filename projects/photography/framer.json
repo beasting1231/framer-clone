@@ -4,7 +4,7 @@
     "id": "photography",
     "name": "photography",
     "createdAt": "2026-07-09T17:00:03.994Z",
-    "updatedAt": "2026-07-09T19:29:08.150Z"
+    "updatedAt": "2026-07-09T19:31:34.656Z"
   },
   "pages": [
     {
@@ -88,8 +88,22 @@
             "left": 48
           },
           "fill": {
-            "type": "solid",
-            "color": "#7a7a7a"
+            "type": "linear",
+            "angle": 135,
+            "stops": [
+              {
+                "color": "#0F172A",
+                "position": 0
+              },
+              {
+                "color": "#1E3A8A",
+                "position": 0.48
+              },
+              {
+                "color": "#D97706",
+                "position": 1
+              }
+            ]
           }
         }
       },
