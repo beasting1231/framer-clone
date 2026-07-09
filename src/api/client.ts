@@ -84,7 +84,7 @@ export const api = {
   getProject: (id: string) => request<SerializedProject>(`/api/projects/${id}`),
 
   saveProject: (id: string, project: SerializedProject) =>
-    request<{ ok: true }>(`/api/projects/${id}`, { method: "PUT", body: JSON.stringify(project) }),
+    request<{ ok: true; project: SerializedProject; revision: string }>(`/api/projects/${id}`, { method: "PUT", body: JSON.stringify(project) }),
 
   renameProject: (id: string, name: string) =>
     request<{ ok: true }>(`/api/projects/${id}/rename`, { method: "POST", body: JSON.stringify({ name }) }),

@@ -70,9 +70,9 @@ async function persist(get: () => DocumentState, set: (partial: Partial<Document
   if (!project || !projectId) return;
   set({ saveState: "saving" });
   try {
-    await api.saveProject(projectId, project);
+    const saved = await api.saveProject(projectId, project);
     // only mark saved if nothing changed while saving
-    if (get().saveState === "saving") set({ saveState: "saved" });
+    if (get().saveState === "saving" && get().projectId === projectId) set({ project: saved.project, saveState: "saved" });
   } catch (err) {
     console.error("save failed", err);
     set({ saveState: "error" });
@@ -189,6 +189,7 @@ export const useDocument = create<DocumentState>((set, get) => ({
       savingPromise = persist(get, set);
     }
     if (savingPromise) await savingPromise;
+    if (get().saveState === "error") throw new Error("Save failed. Fix the save error before asking Codex to edit.");
   },
 }));
 

@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 import { buildCtx, generateSite } from "../src/codegen/generate";
 import { emitThumbnailHtml } from "../src/codegen/thumbnailHtml";
+import { hashProject } from "../src/model/projectHash";
 import type { SerializedProject } from "../src/model/types";
 import { backfillMissingThumbnails, copyThumbnail, hasThumbnail, scheduleThumbnail, thumbnailPath } from "./thumbnail";
 import { createCodexRouter, streamCodexProgress } from "./codex";
@@ -123,7 +124,8 @@ app.get("/api/projects/:id", async (req, res) => {
 app.put("/api/projects/:id", async (req, res) => {
   const project = req.body as SerializedProject;
   await writeProjectToDisk(req.params.id, project);
-  res.json({ ok: true });
+  const saved = await readProject(req.params.id);
+  res.json({ ok: true, project: saved ?? project, revision: hashProject(saved ?? project) });
 });
 
 app.post("/api/projects/:id/rename", async (req, res) => {

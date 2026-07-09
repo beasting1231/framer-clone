@@ -99,7 +99,7 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
     if (!project) return res.status(404).json({ ok: false, error: "Project not found." });
     const currentHash = hashProject(project);
     if (body.projectHash && body.projectHash !== currentHash) {
-      return res.status(409).json({ ok: false, error: "Project changed before Codex started. Save and retry." });
+      console.warn(`[codex] client revision mismatch for ${projectId}; continuing with latest saved project`);
     }
     const beforeValidation = validateProject(project);
     if (!beforeValidation.ok) {
