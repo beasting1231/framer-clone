@@ -42,6 +42,7 @@ const SECTIONS: { id: TemplateId; label: string; desc: string }[] = [
   { id: "section-features", label: "Features", desc: "3-column feature grid" },
   { id: "section-gallery", label: "Gallery", desc: "Responsive image grid" },
   { id: "section-pricing", label: "Pricing", desc: "3 plans with highlight" },
+  { id: "section-contact", label: "Contact", desc: "Copy and contact form" },
   { id: "section-testimonials", label: "Testimonials", desc: "Quote cards" },
   { id: "section-cta", label: "Call to Action", desc: "Dark banner with button" },
   { id: "section-footer", label: "Footer", desc: "Brand, copyright, links" },

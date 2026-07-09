@@ -5,6 +5,7 @@ import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import type { Request, Response, Router } from "express";
 import express from "express";
+import { TEMPLATE_IDS } from "../src/insert/templates";
 import type { SerializedProject } from "../src/model/types";
 import { hashProject } from "../src/model/projectHash";
 import { applyProjectPatch, parseProjectPatch, validateProject, type ProjectPatch } from "../src/model/projectPatch";
@@ -243,6 +244,8 @@ async function buildFramerCodexPrompt(
     "Allowed operation notes:",
     "- opsJson must be a JSON-encoded string containing an array of ProjectPatch operations.",
     "- For no-change answers, set opsJson to \"[]\" and put the answer in summary.",
+    `- Available TemplateId values: ${TEMPLATE_IDS.join(", ")}.`,
+    "- Use section-pricing for pricing sections, section-contact for contact forms, and section-footer for footers.",
     "- setText only targets text nodes.",
     "- setStyles uses desktop/tablet/phone and StyleProps keys from the project model.",
     "- insertTemplate uses existing insert-tab TemplateId values.",

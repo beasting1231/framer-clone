@@ -28,9 +28,34 @@ export type TemplateId =
   | "section-features"
   | "section-cta"
   | "section-pricing"
+  | "section-contact"
   | "section-testimonials"
   | "section-footer"
   | "section-gallery";
+
+export const TEMPLATE_IDS: TemplateId[] = [
+  "frame",
+  "stack-v",
+  "stack-h",
+  "grid",
+  "text",
+  "heading",
+  "image",
+  "button",
+  "link-text",
+  "input",
+  "textarea",
+  "divider",
+  "section-navbar",
+  "section-hero",
+  "section-features",
+  "section-cta",
+  "section-pricing",
+  "section-contact",
+  "section-testimonials",
+  "section-footer",
+  "section-gallery",
+];
 
 export interface BuiltTemplate {
   root: Node;
@@ -341,6 +366,71 @@ function buildPricing(): BuiltTemplate {
   return assemble(section, [leaf(heading), gridBuilt]);
 }
 
+function buildContact(): BuiltTemplate {
+  const section = createStack("Contact", {
+    width: fill(),
+    height: fit(),
+    direction: "row",
+    gap: 48,
+    align: "start",
+    justify: "center",
+    padding: { top: 96, right: 48, bottom: 96, left: 48 },
+    fill: { type: "solid", color: "#F7F7FA" },
+  });
+  section.tag = "section";
+  section.styles.tablet = { direction: "column", align: "stretch" };
+
+  const copy = createStack("Contact Copy", {
+    width: { mode: "relative", value: 45 },
+    height: fit(),
+    direction: "column",
+    gap: 16,
+    align: "start",
+    justify: "start",
+    padding: { top: 0, right: 0, bottom: 0, left: 0 },
+    fill: null,
+    maxWidth: 480,
+  });
+  copy.styles.tablet = { width: fill(), maxWidth: undefined };
+  const heading = createText("Get in touch", { fontSize: 44, fontWeight: 700, letterSpacing: -1, lineHeight: 1.1, width: fill(), height: fit() });
+  heading.name = "Heading";
+  heading.textTag = "h2";
+  const body = createText("Tell us about your project and we will get back to you soon.", { fontSize: 17, lineHeight: 1.6, color: "#555566", width: fill(), height: fit() });
+  body.name = "Body";
+  const copyBuilt = assemble(copy, [leaf(heading), leaf(body)]);
+
+  const form = createStack("Contact Form", {
+    width: { mode: "relative", value: 55 },
+    height: fit(),
+    direction: "column",
+    gap: 12,
+    align: "stretch",
+    justify: "start",
+    padding: { top: 28, right: 28, bottom: 28, left: 28 },
+    fill: { type: "solid", color: "#FFFFFF" },
+    radius: 16,
+    maxWidth: 560,
+  });
+  form.tag = "form";
+  form.styles.desktop.border = { width: 1, color: "#E5E5EA", style: "solid" };
+  form.styles.tablet = { width: fill(), maxWidth: undefined };
+
+  const nameInput = createFrame("Name Input", { width: fill(), height: px(48), fill: { type: "solid", color: "#FFFFFF" }, border: { width: 1, color: "#DDDDDD", style: "solid" }, radius: 10, padding: { top: 0, right: 14, bottom: 0, left: 14 }, fontSize: 14 });
+  nameInput.tag = "input";
+  nameInput.placeholder = "Name";
+  const emailInput = createFrame("Email Input", { width: fill(), height: px(48), fill: { type: "solid", color: "#FFFFFF" }, border: { width: 1, color: "#DDDDDD", style: "solid" }, radius: 10, padding: { top: 0, right: 14, bottom: 0, left: 14 }, fontSize: 14 });
+  emailInput.tag = "input";
+  emailInput.inputType = "email";
+  emailInput.placeholder = "Email";
+  const messageInput = createFrame("Message", { width: fill(), height: px(132), fill: { type: "solid", color: "#FFFFFF" }, border: { width: 1, color: "#DDDDDD", style: "solid" }, radius: 10, padding: { top: 12, right: 14, bottom: 12, left: 14 }, fontSize: 14 });
+  messageInput.tag = "textarea";
+  messageInput.placeholder = "Message";
+  const submit = buildButton("Send Message");
+  const formBuilt = assemble(form, [leaf(nameInput), leaf(emailInput), leaf(messageInput), submit]);
+
+  return assemble(section, [copyBuilt, formBuilt]);
+}
+
 function buildTestimonialCard(quote: string, author: string, role: string): BuiltTemplate {
   const card = createStack(author, {
     width: fill(),
@@ -551,6 +641,8 @@ export function buildTemplate(id: TemplateId): BuiltTemplate {
       return buildCta();
     case "section-pricing":
       return buildPricing();
+    case "section-contact":
+      return buildContact();
     case "section-testimonials":
       return buildTestimonials();
     case "section-footer":
