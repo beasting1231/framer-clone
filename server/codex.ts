@@ -5,7 +5,7 @@ import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import type { Request, Response, Router } from "express";
 import express from "express";
-import { TEMPLATE_IDS } from "../src/insert/templates";
+import { buildAgentEditorGuide } from "../src/model/agentGuide";
 import type { SerializedProject } from "../src/model/types";
 import { hashProject } from "../src/model/projectHash";
 import { applyProjectPatch, parseProjectPatch, validateProject, type ProjectPatch } from "../src/model/projectPatch";
@@ -230,31 +230,14 @@ async function buildFramerCodexPrompt(
     `Current page: ${context.currentPageId || "unknown"}`,
     `Current breakpoint: ${context.breakpoint || "desktop"}`,
     "",
-    "Your job:",
-    "- You are wrapped inside a visual editor, not a normal coding repo.",
-    "- The project model is the source of truth. Generated React files under site/ are output-only.",
-    "- Never edit files directly. Return only a JSON ProjectPatch object.",
-    "- Every visual/content change must remain editable in the canvas, layers, and properties panel.",
-    "- Prefer small targeted operations over broad rewrites.",
-    "- If the user asks a question or no change is needed, return a JSON object with a helpful summary and an empty ops array.",
-    "- If you are unsure how to make a safe editor-model change, return an empty ops array and explain why in summary.",
+    buildAgentEditorGuide(),
     "",
     "Allowed response shape:",
     JSON.stringify(projectPatchSchemaExample(), null, 2),
     "",
-    "Allowed operation notes:",
+    "Response rules:",
     "- opsJson must be a JSON-encoded string containing an array of ProjectPatch operations.",
     "- For no-change answers, set opsJson to \"[]\" and put the answer in summary.",
-    `- Available TemplateId values: ${TEMPLATE_IDS.join(", ")}.`,
-    "- Use section-pricing for pricing sections, section-contact for contact forms, and section-footer for footers.",
-    "- setText only targets text nodes.",
-    "- setStyles uses desktop/tablet/phone and StyleProps keys from the project model.",
-    "- Never use raw CSS keys like background, backgroundImage, margin, or className. Unsupported style keys are rejected.",
-    "- For gradient backgrounds, set styles.fill to {\"type\":\"linear\",\"angle\":135,\"stops\":[{\"color\":\"#0F172A\",\"position\":0},{\"color\":\"#D97706\",\"position\":1}]} or a radial fill. Do not use CSS background strings.",
-    "- insertTemplate uses existing insert-tab TemplateId values.",
-    "- For requests like below/after/above/before an existing section, use insertTemplateRelative with the section node as anchorNodeId.",
-    "- Root children are ordered top-to-bottom in the page. Do not infer order from the layer panel if it appears reversed.",
-    "- insertNodeTree must include a complete editable node subtree with parent/children links inside that subtree.",
     "- Do not include markdown fences. Return JSON only.",
     "",
     project ? `Pages: ${project.pages.map((page) => `${page.name} (${page.path}, root ${page.rootId})`).join(", ")}` : "",
@@ -463,10 +446,10 @@ function sanitizeCodexOption(value: unknown, fallback = "") {
 function buildCodexExecArgs(options: { cwd: string; prompt: string; threadId?: string; model?: string; reasoning: string; outputSchema?: string }) {
   const flags = [
     "--skip-git-repo-check",
-    "--sandbox",
-    "read-only",
     "-c",
     'approval_policy="never"',
+    "-c",
+    'sandbox_mode="read-only"',
     "-c",
     `model_reasoning_effort="${options.reasoning}"`,
     "-c",

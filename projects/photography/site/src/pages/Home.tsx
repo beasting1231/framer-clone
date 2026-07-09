@@ -45,7 +45,7 @@ export default function Home() {
             },
           }}
         >
-          Build something beautiful
+          Capture the moments that matter
         </motion.h1>
         <motion.p
           className="subheading-guKe"
@@ -74,7 +74,7 @@ export default function Home() {
             },
           }}
         >
-          A visual canvas that ships real, production-ready code. Design, publish, done.
+          Elegant photography for portraits, weddings, and stories worth preserving.
         </motion.p>
         <motion.div
           className="buttons-NkCL"
@@ -106,14 +106,14 @@ export default function Home() {
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
           >
-            <p className="label-doLR">Get Started</p>
+            <p className="label-doLR">View Portfolio</p>
           </motion.button>
           <motion.button
             className="button-mKC9"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
           >
-            <p className="label-ifOh">Learn More</p>
+            <p className="label-ifOh">Book a Session</p>
           </motion.button>
         </motion.div>
       </section>
