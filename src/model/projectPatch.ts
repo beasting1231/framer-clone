@@ -6,6 +6,7 @@ export type ProjectPatchOp =
   | { op: "setNodeFields"; nodeId: string; fields: Pick<Partial<Node>, "name" | "tag" | "textTag" | "alt" | "placeholder" | "inputType" | "link"> }
   | { op: "setStyles"; nodeIds: string[]; breakpoint: BreakpointId; styles: Partial<StyleProps> }
   | { op: "insertTemplate"; templateId: TemplateId; parentId: string; index?: number }
+  | { op: "insertTemplateRelative"; templateId: TemplateId; anchorNodeId: string; position: "before" | "after" }
   | { op: "insertNodeTree"; parentId: string; index?: number; rootId: string; nodes: Record<string, Node> }
   | { op: "deleteNodes"; nodeIds: string[] }
   | { op: "reparent"; nodeId: string; parentId: string; index?: number }
@@ -148,6 +149,22 @@ export function applyProjectPatch(project: SerializedProject, patch: ProjectPatc
         parent.children.splice(index, 0, built.root.id);
         Object.assign(next.nodes, built.nodes);
         changed.add(built.root.id);
+        break;
+      }
+      case "insertTemplateRelative": {
+        const anchor = requireNode(next, op.anchorNodeId);
+        if (!anchor.parent) throw new Error(`Anchor node ${op.anchorNodeId} has no parent.`);
+        const parent = requireNode(next, anchor.parent);
+        const anchorIndex = parent.children.indexOf(anchor.id);
+        if (anchorIndex < 0) throw new Error(`Anchor node ${op.anchorNodeId} is not in its parent children.`);
+        const built = buildTemplate(op.templateId);
+        if (!built) throw new Error(`Unknown template ${op.templateId}.`);
+        const index = op.templateId === "section-navbar" ? 0 : anchorIndex + (op.position === "after" ? 1 : 0);
+        built.root.parent = parent.id;
+        parent.children.splice(index, 0, built.root.id);
+        Object.assign(next.nodes, built.nodes);
+        changed.add(built.root.id);
+        changed.add(parent.id);
         break;
       }
       case "insertNodeTree": {

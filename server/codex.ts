@@ -222,6 +222,7 @@ async function buildFramerCodexPrompt(
       children: node!.children,
     }));
   const conversation = normalizeConversation(context.conversation);
+  const pageStructure = project ? describePageStructure(project) : "";
 
   return [
     `You are the in-editor AI agent for the local Framer-style visual editor project "${project?.meta.name || context.projectId}".`,
@@ -249,10 +250,13 @@ async function buildFramerCodexPrompt(
     "- setText only targets text nodes.",
     "- setStyles uses desktop/tablet/phone and StyleProps keys from the project model.",
     "- insertTemplate uses existing insert-tab TemplateId values.",
+    "- For requests like below/after/above/before an existing section, use insertTemplateRelative with the section node as anchorNodeId.",
+    "- Root children are ordered top-to-bottom in the page. Do not infer order from the layer panel if it appears reversed.",
     "- insertNodeTree must include a complete editable node subtree with parent/children links inside that subtree.",
     "- Do not include markdown fences. Return JSON only.",
     "",
     project ? `Pages: ${project.pages.map((page) => `${page.name} (${page.path}, root ${page.rootId})`).join(", ")}` : "",
+    pageStructure,
     selected.length ? `Selected nodes:\n${JSON.stringify(selected, null, 2)}` : "",
     conversation.length ? `Recent chat:\n${conversation.map((m) => `${m.role}: ${m.text}`).join("\n")}` : "",
     context.retryError ? `Previous patch was rejected. Return one corrected ProjectPatch. Rejection reason: ${context.retryError}` : "",
@@ -278,6 +282,20 @@ function normalizeConversation(value: unknown) {
     .filter((message) => message.text);
 }
 
+function describePageStructure(project: SerializedProject) {
+  return [
+    "Page root child order, top-to-bottom:",
+    ...project.pages.map((page) => {
+      const root = project.nodes[page.rootId];
+      const children = root?.children.map((id, index) => {
+        const node = project.nodes[id];
+        return `${index}: ${node?.name || "Unknown"} (${id})`;
+      }) ?? [];
+      return `${page.name} root ${page.rootId}: ${children.join(" -> ")}`;
+    }),
+  ].join("\n");
+}
+
 function projectPatchSchemaExample() {
   return {
     summary: "Short human-readable answer or change summary.",
@@ -285,6 +303,7 @@ function projectPatchSchemaExample() {
       { op: "setText", nodeId: "selectedTextNodeId", text: "New text" },
       { op: "setStyles", nodeIds: ["nodeId"], breakpoint: "desktop", styles: { fontSize: 48, color: "#111111" } },
       { op: "insertTemplate", templateId: "section-hero", parentId: "pageRootId", index: 1 },
+      { op: "insertTemplateRelative", templateId: "section-pricing", anchorNodeId: "heroNodeId", position: "after" },
     ]),
   };
 }
