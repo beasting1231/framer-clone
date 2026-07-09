@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+projects/*/site/node_modules/
+
+# Build output
+dist/
+projects/*/site/dist/
+
+# Vite
+.vite/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Playwright / test artifacts
+test-results/
+playwright-report/
+blob-report/
