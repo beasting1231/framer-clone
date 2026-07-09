@@ -176,8 +176,12 @@ export interface HoverEffect {
   opacity?: number;
   rotate?: number;
   y?: number;
+  /** @deprecated use styles.fill */
   fill?: Fill | null;
+  /** @deprecated use styles.color */
   color?: string;
+  /** appearance overrides applied on :hover */
+  styles?: Partial<StyleProps>;
   duration: number;
 }
 

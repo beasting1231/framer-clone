@@ -220,6 +220,46 @@ textarea:focus {
   flex-shrink: 0;
 }
 
+.property-state-bar {
+  padding: 10px 10px 4px;
+  border-bottom: 1px solid var(--border-soft);
+  position: sticky;
+  top: 0;
+  background: var(--bg-1);
+  z-index: 2;
+}
+
+.property-state-tabs {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-2);
+  border-radius: 8px;
+  padding: 2px;
+  margin-bottom: 8px;
+}
+
+.property-state-tab {
+  flex: 1;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.property-state-tab:hover {
+  color: var(--text-1);
+}
+
+.property-state-tab.active {
+  background: var(--bg-3);
+  color: var(--text-0);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
 .panel-tabs {
   display: flex;
   padding: 8px 8px 0;
@@ -1080,7 +1120,7 @@ select.prop-input {
 .picker {
   height: 100%;
   overflow-y: auto;
-  background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0, 153, 255, 0.12), transparent), var(--bg-0);
+  background: var(--bg-0);
   padding: 60px 40px;
 }
 
@@ -1093,7 +1133,7 @@ select.prop-input {
   font-size: 28px;
   font-weight: 700;
   letter-spacing: -0.5px;
-  margin-bottom: 4px;
+  margin-bottom: 36px;
 }
 
 .picker .subtitle {
@@ -1105,7 +1145,42 @@ select.prop-input {
 .picker-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 16px;
+  gap: 20px 16px;
+}
+
+.project-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.project-item--menu-open {
+  z-index: 20;
+}
+
+.project-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px;
+  min-height: 16px;
+}
+
+.project-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-edited {
+  font-size: 11px;
+  color: var(--text-2);
+  flex-shrink: 0;
 }
 
 .project-card {
@@ -1116,21 +1191,16 @@ select.prop-input {
   overflow: visible;
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.15s, transform 0.15s;
+  transition: border-color 0.15s;
   position: relative;
 }
 
-.project-card--menu-open {
-  z-index: 20;
-}
-
-.project-card:hover {
+.project-item:hover .project-card {
   border-color: var(--border);
-  transform: translateY(-2px);
 }
 
 .project-card .thumb {
-  height: 110px;
+  height: 140px;
   background: linear-gradient(135deg, var(--bg-2), var(--bg-3));
   display: flex;
   align-items: center;
@@ -1138,42 +1208,59 @@ select.prop-input {
   color: var(--text-2);
   font-size: 28px;
   font-weight: 700;
-  border-radius: 13px 13px 0 0;
+  border-radius: 13px;
   overflow: hidden;
 }
 
-.project-card .card-body {
-  padding: 12px 14px;
+.project-card .thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+
+.project-card-menu-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  position: relative;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.project-item:hover .project-card-menu-btn,
+.project-item--menu-open .project-card-menu-btn {
+  opacity: 1;
+}
+
+.project-card-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.6);
 }
 
 .project-card-menu {
   position: absolute;
   right: 0;
-  top: calc(100% + 4px);
+  bottom: calc(100% + 4px);
   z-index: 30;
   min-width: 140px;
-}
-
-.project-card .name {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.project-card .meta {
-  font-size: 11px;
-  color: var(--text-2);
-  margin-top: 2px;
 }
 
 .project-card.new {
   border-style: dashed;
   border-color: var(--border);
   background: transparent;
-  min-height: 170px;
+  min-height: 140px;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1460,6 +1547,174 @@ select.prop-input {
   color: #fff;
 }
 
+/* ── Codex chat ────────────────────────────────────────────────────────── */
+
+.codex-fab {
+  position: fixed;
+  right: 282px;
+  bottom: 18px;
+  z-index: 80;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--text-0);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.codex-fab:hover,
+.codex-fab.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.codex-fab svg {
+  width: 16px;
+  height: 16px;
+}
+
+.codex-chat {
+  position: fixed;
+  right: 282px;
+  bottom: 64px;
+  z-index: 80;
+  width: min(390px, calc(100vw - 304px));
+  height: min(560px, calc(100vh - 110px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  background: rgba(17, 17, 17, 0.96);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.codex-chat-header {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.codex-chat-header strong {
+  display: block;
+  font-size: 12px;
+}
+
+.codex-chat-header span {
+  display: block;
+  color: var(--text-2);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-s);
+  color: var(--text-1);
+}
+
+.icon-btn:hover {
+  background: var(--bg-3);
+  color: var(--text-0);
+}
+
+.icon-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.codex-chat-log {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.codex-auth {
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--bg-2);
+}
+
+.codex-message {
+  max-width: 92%;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  padding: 9px 10px;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.codex-message.user {
+  align-self: flex-end;
+  background: var(--accent);
+  color: #fff;
+}
+
+.codex-message.assistant {
+  align-self: flex-start;
+  background: var(--bg-2);
+  color: var(--text-0);
+}
+
+.codex-progress {
+  margin: 0 12px 10px;
+  color: var(--text-1);
+  font-size: 11px;
+  min-height: 18px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.codex-progress.file {
+  color: var(--venom);
+}
+
+.codex-progress.command {
+  color: var(--accent);
+}
+
+.codex-progress.error {
+  color: var(--danger);
+}
+
+.codex-composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.codex-composer textarea {
+  min-height: 42px;
+  max-height: 120px;
+  resize: vertical;
+  padding: 9px 10px;
+  line-height: 1.35;
+}
+
+.codex-composer .btn {
+  align-self: end;
+  height: 34px;
+}
+
 /* ── CMS table ─────────────────────────────────────────────────────────── */
 
 .cms-table {
@@ -1532,6 +1787,7 @@ select.prop-input {
   box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
   overflow-y: auto;
   overflow-x: hidden;
+  transform: translateZ(0);
   user-select: text;
 }
 

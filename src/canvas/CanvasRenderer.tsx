@@ -1,6 +1,7 @@
 import { memo, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import type { BreakpointId, CmsCollection, CmsEntry, InstanceOverride, Node, SerializedProject } from "@/model/types";
-import { nodeStyles } from "@/model/resolve";
+import { resolveHoverAppearance } from "@/model/hover";
+import { ancestorChain, nodeStyles } from "@/model/resolve";
 import { stylesToCss, type CssContext } from "@/model/css";
 import { docActions, useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
@@ -90,17 +91,36 @@ function EditableText({ node, env, style, hit }: { node: Node; env: RenderEnv; s
 export const RenderNode = memo(function RenderNode({ id, env, parentCtx }: { id: string; env: RenderEnv; parentCtx: CssContext }) {
   const node = env.project.nodes[id];
   const animPatch = useTimeline((s) => (s.open ? s.preview[id] : undefined));
+  const propertyState = useEditor((s) => s.propertyState);
+  const selection = useEditor((s) => s.selection);
   if (!node) return null;
 
-  const props = nodeStyles(node, env.project, env.breakpoint);
   const override = env.overrides?.[id];
   if (override?.visible === false) return null;
 
+  const hit = env.hitId ? env.hitId(id) : id;
+  const showHoverPreview =
+    propertyState === "hover" &&
+    selection.some((selId) => selId === hit || ancestorChain(env.project.nodes, hit).includes(selId));
+
+  const props =
+    showHoverPreview && node.effects?.hover
+      ? resolveHoverAppearance(node, env.project, env.breakpoint, node.effects.hover)
+      : nodeStyles(node, env.project, env.breakpoint);
   let style = stylesToCss(props, node, { ...parentCtx, editor: true }) as CSSProperties;
+  if (showHoverPreview && node.effects?.hover) {
+    const h = node.effects.hover;
+    const transforms: string[] = [];
+    if (style.transform) transforms.push(String(style.transform));
+    if (h.scale !== undefined) transforms.push(`scale(${h.scale})`);
+    if (h.rotate !== undefined) transforms.push(`rotate(${h.rotate}deg)`);
+    if (h.y !== undefined) transforms.push(`translateY(${h.y}px)`);
+    if (transforms.length > 0) style = { ...style, transform: transforms.join(" ") };
+    if (h.opacity !== undefined) style = { ...style, opacity: h.opacity };
+  }
   if (override?.fill && override.fill.type === "solid") style = { ...style, backgroundColor: override.fill.color };
   if (override?.color) style = { ...style, color: override.color };
   if (animPatch) style = { ...style, ...animPatch, willChange: "left, top, transform, opacity, filter" };
-  const hit = env.hitId ? env.hitId(id) : id;
 
   const childCtx: CssContext = {
     parentLayout: props.layout ?? "absolute",

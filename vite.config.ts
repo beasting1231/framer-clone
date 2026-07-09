@@ -18,6 +18,9 @@ export default defineConfig({
     proxy: {
       "/api": "http://localhost:4570",
       "/project-assets": "http://localhost:4570",
+      "/project-thumbnails": "http://localhost:4570",
+      "/thumb-styles": "http://localhost:4570",
+      "/thumb-page": "http://localhost:4570",
       "/published": "http://localhost:4570",
     },
   },

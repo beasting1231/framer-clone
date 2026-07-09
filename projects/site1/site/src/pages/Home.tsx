@@ -3,7 +3,23 @@ import { motion } from "framer-motion";
 export default function Home() {
   return (
     <main className="home-0_Gu">
-      <nav className="navbar-UbiJ">
+      <motion.nav
+        className="navbar-UbiJ"
+        initial={{ top: -75 }}
+        animate={{ top: [-75, -75, 0, 0] }}
+        transition={{
+          top: {
+            type: "tween",
+            duration: 1.4,
+            times: [0, 0.25, 0.6721428571428572, 1],
+            ease: [
+              [0, 0, 1, 1],
+              [0, 0, 0.58, 1],
+              [0, 0, 1, 1],
+            ],
+          },
+        }}
+      >
         <p className="logo-HzFo">Brand</p>
         <div className="nav-links-EPpH">
           <p className="product-3Dkx">Product</p>
@@ -13,34 +29,136 @@ export default function Home() {
         </div>
         <motion.button
           className="button-60YW"
-          whileHover={{ scale: 1.03 }}
+          whileHover={{ rotate: 6 }}
           whileTap={{ scale: 0.97 }}
         >
           <p className="label-9yBP">Sign Up</p>
         </motion.button>
-      </nav>
+      </motion.nav>
       <section className="hero-qUrO">
         <motion.h1
           className="heading-9hrK"
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, x: 0, y: 0 }}
-          transition={{ duration: 0.7, delay: 0, ease: "easeOut" }}
+          initial={{ top: 40, opacity: 0, filter: "blur(15px)" }}
+          animate={{
+            top: [40, 40, 0, 0],
+            opacity: [0, 0, 1, 1],
+            filter: ["blur(15px)", "blur(15px)", "blur(0px)", "blur(0px)"],
+          }}
+          transition={{
+            top: {
+              type: "tween",
+              duration: 1.4,
+              times: [0, 0.14285714285714285, 0.6785714285714286, 1],
+              ease: [
+                [0, 0, 1, 1],
+                [0, 0, 0.58, 1],
+                [0, 0, 1, 1],
+              ],
+            },
+            opacity: {
+              type: "tween",
+              duration: 1.4,
+              times: [0, 0.14285714285714285, 0.6821428571428572, 1],
+              ease: [
+                [0, 0, 1, 1],
+                [0, 0, 0.58, 1],
+                [0, 0, 1, 1],
+              ],
+            },
+            filter: {
+              type: "tween",
+              duration: 1.4,
+              times: [0, 0.14285714285714285, 0.6785714285714286, 1],
+              ease: [
+                [0, 0, 1, 1],
+                [0, 0, 0.58, 1],
+                [0, 0, 1, 1],
+              ],
+            },
+          }}
         >
-          Basting Solutions LLC
+          hero title
         </motion.h1>
         <motion.p
           className="subheading-NclO"
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, x: 0, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.15, ease: "easeOut" }}
+          initial={{ top: 40, opacity: 0, filter: "blur(15px)" }}
+          animate={{
+            top: [40, 40, 0, 0],
+            opacity: [0, 0, 1, 1],
+            filter: ["blur(15px)", "blur(15px)", "blur(0px)", "blur(0px)"],
+          }}
+          transition={{
+            top: {
+              type: "tween",
+              duration: 1.4,
+              times: [0, 0.25, 0.7857142857142857, 1],
+              ease: [
+                [0, 0, 1, 1],
+                [0, 0, 0.58, 1],
+                [0, 0, 1, 1],
+              ],
+            },
+            opacity: {
+              type: "tween",
+              duration: 1.4,
+              times: [0, 0.25, 0.7857142857142857, 1],
+              ease: [
+                [0, 0, 1, 1],
+                [0, 0, 0.58, 1],
+                [0, 0, 1, 1],
+              ],
+            },
+            filter: {
+              type: "tween",
+              duration: 1.4,
+              times: [0, 0.25, 0.7857142857142857, 1],
+              ease: [
+                [0, 0, 1, 1],
+                [0, 0, 0.58, 1],
+                [0, 0, 1, 1],
+              ],
+            },
+          }}
         >
           A visual canvas that ships real, production-ready code. Design, publish, done.
         </motion.p>
         <motion.div
           className="buttons-orlB"
-          initial={{ opacity: 0, y: 40 }}
-          animate={{ opacity: 1, x: 0, y: 0 }}
-          transition={{ duration: 0.7, delay: 0.3, ease: "easeOut" }}
+          initial={{ filter: "blur(15px)", opacity: 0, top: 40 }}
+          animate={{
+            filter: ["blur(15px)", "blur(15px)", "blur(0px)"],
+            opacity: [0, 0, 1],
+            top: [40, 40, 0],
+          }}
+          transition={{
+            filter: {
+              type: "tween",
+              duration: 1.4,
+              times: [0, 0.35714285714285715, 1],
+              ease: [
+                [0, 0, 1, 1],
+                [0, 0, 0.58, 1],
+              ],
+            },
+            opacity: {
+              type: "tween",
+              duration: 1.4,
+              times: [0, 0.35714285714285715, 1],
+              ease: [
+                [0, 0, 1, 1],
+                [0, 0, 0.58, 1],
+              ],
+            },
+            top: {
+              type: "tween",
+              duration: 1.4,
+              times: [0, 0.35714285714285715, 1],
+              ease: [
+                [0, 0, 1, 1],
+                [0, 0, 0.58, 1],
+              ],
+            },
+          }}
         >
           <motion.button
             className="button-dMDo"
@@ -109,6 +227,20 @@ export default function Home() {
             <div className="icon-B0su" />
             <h3 className="title-8BKM">Responsive</h3>
             <p className="body-5CAK">
+              Desktop, tablet and phone breakpoints with cascading overrides.
+            </p>
+          </motion.div>
+          <motion.div
+            className="responsive-copy-bY8C"
+            initial={{ opacity: 0, y: 40 }}
+            whileInView={{ opacity: 1, x: 0, y: 0 }}
+            viewport={{ once: true, amount: 0.3 }}
+            transition={{ duration: 0.6, delay: 0, ease: "easeOut" }}
+            whileHover={{ y: -4 }}
+          >
+            <div className="icon-EY5q" />
+            <h3 className="title-6yco">Responsive</h3>
+            <p className="body-XXwG">
               Desktop, tablet and phone breakpoints with cascading overrides.
             </p>
           </motion.div>

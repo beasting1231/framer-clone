@@ -1,10 +1,12 @@
 import { docActions, useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
-import { overriddenKeys, resolveStyles } from "@/model/resolve";
+import { defaultHoverEffect, ensureHoverEffect, getHoverStyles, hasHoverOverride, patchHoverStyles, resetHoverStyleKeys, resolveHoverAppearance } from "@/model/hover";
+import { nodeStyles, overriddenKeys, resolveStyles } from "@/model/resolve";
 import type {
   BreakpointId,
   EntrancePreset,
   Fill,
+  HoverEffect,
   Node,
   SerializedProject,
   Shadow,
@@ -28,6 +30,7 @@ export function PropertiesPanel() {
   const project = useDocument((s) => s.project);
   const selection = useEditor((s) => s.selection);
   const breakpoint = useEditor((s) => s.breakpoint);
+  const propertyState = useEditor((s) => s.propertyState);
 
   if (!project) return null;
   if (selection.length === 0) {
@@ -49,12 +52,17 @@ export function PropertiesPanel() {
   if (nodes.length === 0) return <div className="right-panel" />;
   const node = nodes[0];
 
-  return <NodeProperties key={`${node.id}-${breakpoint}`} node={node} ids={selection} project={project} bp={breakpoint} />;
+  return <NodeProperties key={`${node.id}-${breakpoint}-${propertyState}`} node={node} ids={selection} project={project} bp={breakpoint} />;
 }
 
 function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[]; project: SerializedProject; bp: BreakpointId }) {
-  const styles = resolveStyles(node.styles, bp);
+  const propertyState = useEditor((s) => s.propertyState);
+  const setPropertyState = useEditor((s) => s.setPropertyState);
+  const normalStyles = nodeStyles(node, project, bp);
   const overridden = overriddenKeys(node.styles, bp);
+  const hoverEffect = node.effects?.hover;
+  const isHover = propertyState === "hover";
+  const styles = isHover ? resolveHoverAppearance(node, project, bp, hoverEffect) : normalStyles;
   const isText = node.type === "text";
   const isFrame = node.type === "frame" || node.type === "collectionList";
   const isImage = node.type === "image";
@@ -62,11 +70,41 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
   const isRoot = project.pages.some((p) => p.rootId === node.id) || project.components.some((c) => c.rootId === node.id);
   const multi = ids.length > 1;
 
-  const set = (patch: Partial<StyleProps>) => docActions.setStyles(ids, bp, patch);
+  const updateHover = (patch: Partial<HoverEffect>) => {
+    const base = ensureHoverEffect(node);
+    docActions.updateNode(node.id, { effects: { ...node.effects, hover: { ...base, ...patch } } });
+  };
+
+  const setHoverStyle = (patch: Partial<StyleProps>) => {
+    const base = ensureHoverEffect(node);
+    updateHover(patchHoverStyles(base, patch));
+  };
+
+  const set = (patch: Partial<StyleProps>) => {
+    if (isHover) setHoverStyle(patch);
+    else docActions.setStyles(ids, bp, patch);
+  };
+
   const reset = (...keys: (keyof StyleProps)[]) => {
+    if (isHover) {
+      const base = ensureHoverEffect(node);
+      updateHover(resetHoverStyleKeys(base, keys));
+      return;
+    }
     if (bp !== "desktop") docActions.resetStyleOverride(ids, bp, keys);
   };
-  const ov = (...keys: (keyof StyleProps)[]) => keys.some((k) => overridden.has(k));
+
+  const ov = (...keys: (keyof StyleProps)[]) => {
+    if (isHover) return keys.some((k) => hasHoverOverride(hoverEffect, k));
+    return keys.some((k) => overridden.has(k));
+  };
+
+  const switchToHover = () => {
+    if (!node.effects?.hover) {
+      docActions.updateNode(node.id, { effects: { ...node.effects, hover: defaultHoverEffect() } });
+    }
+    setPropertyState("hover");
+  };
 
   const parent = node.parent ? project.nodes[node.parent] : null;
   const parentLayout = parent ? (resolveStyles(parent.styles, bp).layout ?? "absolute") : "absolute";
@@ -77,10 +115,24 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
 
   return (
     <div className="right-panel">
+      {!multi && !isRoot && (
+        <PropertyStateBar
+          state={propertyState}
+          onNormal={() => setPropertyState("normal")}
+          onHover={switchToHover}
+          hoverDuration={hoverEffect?.duration ?? 0.2}
+          onDurationChange={(v) => updateHover({ duration: v })}
+        />
+      )}
       {multi && <AlignmentBar />}
       {/* ── name & breakpoint hint */}
       <Section title={multi ? `${ids.length} layers` : node.name}>
-        {bp !== "desktop" && (
+        {isHover && (
+          <div className="muted" style={{ fontSize: 10, lineHeight: 1.5, marginBottom: 4 }}>
+            Editing hover state — blue dots mark overrides from normal (click to reset).
+          </div>
+        )}
+        {bp !== "desktop" && !isHover && (
           <div className="muted" style={{ fontSize: 10, lineHeight: 1.5, marginBottom: 4 }}>
             Editing {bp} — changed values override desktop. Blue dots mark overrides (click to reset).
           </div>
@@ -101,8 +153,13 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
         )}
       </Section>
 
+      {/* ── hover quick appearance */}
+      {isHover && !multi && !isRoot && (
+        <HoverAppearanceSection node={node} project={project} bp={bp} isText={isText} set={set} ov={ov} reset={reset} styles={styles} />
+      )}
+
       {/* ── position */}
-      {inAbsolute && (
+      {!isHover && inAbsolute && (
         <Section title="Position">
           <PropRow label="X / Y" overridden={ov("x", "y")} onReset={() => reset("x", "y")}>
             <NumberInput value={styles.x ?? 0} unit="X" onChange={(v) => set({ x: v })} />
@@ -116,7 +173,7 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
           </PropRow>
         </Section>
       )}
-      {!inAbsolute && !isRoot && (
+      {!isHover && !inAbsolute && !isRoot && (
         <Section title="Position">
           <PropRow label="Absolute" overridden={ov("positionAbsolute")} onReset={() => reset("positionAbsolute")}>
             <Segmented
@@ -286,7 +343,7 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
       )}
 
       {/* ── collection list settings */}
-      {node.type === "collectionList" && (
+      {!isHover && node.type === "collectionList" && (
         <Section title="Collection">
           <PropRow label="Source">
             <select
@@ -316,8 +373,8 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
 
       {/* ── text content + typography */}
       {isText && (
-        <Section title="Text">
-          {bindableCollection && (
+        <Section title={isHover ? "Typography" : "Text"}>
+          {!isHover && bindableCollection && (
             <PropRow label="Bind to">
               <select
                 className="prop-input"
@@ -337,7 +394,7 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
               </select>
             </PropRow>
           )}
-          {!node.binding && (
+          {!isHover && !node.binding && (
             <textarea
               className="prop-input"
               style={{ width: "100%", height: 60, padding: 6, marginBottom: 6 }}
@@ -347,16 +404,18 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
               onKeyDown={(e) => e.stopPropagation()}
             />
           )}
-          <PropRow label="Tag">
-            <select className="prop-input" value={node.textTag ?? "p"} onChange={(e) => docActions.updateNode(node.id, { textTag: e.target.value as TextTag })}>
-              {["h1", "h2", "h3", "h4", "h5", "h6", "p", "span", "blockquote", "code"].map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </PropRow>
-          {project.textStyles.length > 0 && (
+          {!isHover && (
+            <PropRow label="Tag">
+              <select className="prop-input" value={node.textTag ?? "p"} onChange={(e) => docActions.updateNode(node.id, { textTag: e.target.value as TextTag })}>
+                {["h1", "h2", "h3", "h4", "h5", "h6", "p", "span", "blockquote", "code"].map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </PropRow>
+          )}
+          {!isHover && project.textStyles.length > 0 && (
             <PropRow label="Style">
               <select
                 className="prop-input"
@@ -399,37 +458,43 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
           <PropRow label="Spacing" overridden={ov("letterSpacing")} onReset={() => reset("letterSpacing")}>
             <NumberInput value={styles.letterSpacing ?? 0} step={0.1} unit="px" onChange={(v) => set({ letterSpacing: v })} />
           </PropRow>
-          <PropRow label="Color" overridden={ov("color")} onReset={() => reset("color")}>
-            <ColorInput value={styles.color ?? "#111111"} onChange={(c) => set({ color: c, colorStyleId: undefined })} />
-          </PropRow>
-          <PropRow label="Align" overridden={ov("textAlign")} onReset={() => reset("textAlign")}>
-            <Segmented
-              value={styles.textAlign ?? "left"}
-              options={[
-                { value: "left", label: "⟸" },
-                { value: "center", label: "≡" },
-                { value: "right", label: "⟹" },
-              ]}
-              onChange={(v) => set({ textAlign: v })}
-            />
-          </PropRow>
-          <PropRow label="Case" overridden={ov("textTransform")} onReset={() => reset("textTransform")}>
-            <Segmented
-              value={styles.textTransform ?? "none"}
-              options={[
-                { value: "none", label: "Aa" },
-                { value: "uppercase", label: "AA" },
-                { value: "lowercase", label: "aa" },
-                { value: "capitalize", label: "Ab" },
-              ]}
-              onChange={(v) => set({ textTransform: v })}
-            />
-          </PropRow>
+          {!isHover && (
+            <PropRow label="Color" overridden={ov("color")} onReset={() => reset("color")}>
+              <ColorInput value={styles.color ?? "#111111"} onChange={(c) => set({ color: c })} />
+            </PropRow>
+          )}
+          {!isHover && (
+            <PropRow label="Align" overridden={ov("textAlign")} onReset={() => reset("textAlign")}>
+              <Segmented
+                value={styles.textAlign ?? "left"}
+                options={[
+                  { value: "left", label: "⟸" },
+                  { value: "center", label: "≡" },
+                  { value: "right", label: "⟹" },
+                ]}
+                onChange={(v) => set({ textAlign: v })}
+              />
+            </PropRow>
+          )}
+          {!isHover && (
+            <PropRow label="Case" overridden={ov("textTransform")} onReset={() => reset("textTransform")}>
+              <Segmented
+                value={styles.textTransform ?? "none"}
+                options={[
+                  { value: "none", label: "Aa" },
+                  { value: "uppercase", label: "AA" },
+                  { value: "lowercase", label: "aa" },
+                  { value: "capitalize", label: "Ab" },
+                ]}
+                onChange={(v) => set({ textTransform: v })}
+              />
+            </PropRow>
+          )}
         </Section>
       )}
 
       {/* ── image */}
-      {isImage && (
+      {!isHover && isImage && (
         <Section title="Image">
           {bindableCollection && (
             <PropRow label="Bind to">
@@ -492,7 +557,7 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
       )}
 
       {/* ── instance */}
-      {isInstance && (
+      {!isHover && isInstance && (
         <Section title="Component">
           <div className="muted" style={{ fontSize: 11, lineHeight: 1.5, marginBottom: 8 }}>
             Instance of <strong style={{ color: "var(--component)" }}>{project.components.find((c) => c.id === node.componentId)?.name}</strong>.
@@ -606,10 +671,15 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
       </Section>
 
       {/* ── link */}
-      {!isRoot && !multi && <LinkSection node={node} project={project} />}
+      {!isRoot && !multi && !isHover && <LinkSection node={node} project={project} />}
+
+      {/* ── hover motion */}
+      {isHover && !isRoot && !multi && (
+        <HoverMotionSection hover={ensureHoverEffect(node)} onChange={updateHover} />
+      )}
 
       {/* ── animations */}
-      {!isRoot && !multi && <EffectsSection node={node} />}
+      {!isHover && !isRoot && !multi && <EffectsSection node={node} />}
     </div>
   );
 }
@@ -995,6 +1065,163 @@ function LinkSection({ node, project }: { node: Node; project: SerializedProject
   );
 }
 
+function findFirstTextDescendant(project: SerializedProject, rootId: string): Node | null {
+  const visit = (id: string): Node | null => {
+    const n = project.nodes[id];
+    if (!n) return null;
+    if (n.type === "text") return n;
+    for (const childId of n.children) {
+      const found = visit(childId);
+      if (found) return found;
+    }
+    return null;
+  };
+  return visit(rootId);
+}
+
+function setNodeHoverStyle(project: SerializedProject, nodeId: string, patch: Partial<StyleProps>) {
+  const target = project.nodes[nodeId];
+  if (!target) return;
+  const base = ensureHoverEffect(target);
+  docActions.updateNode(nodeId, { effects: { ...target.effects, hover: patchHoverStyles(base, patch) } });
+}
+
+function HoverAppearanceSection({
+  node,
+  project,
+  bp,
+  isText,
+  styles,
+  set,
+  ov,
+  reset,
+}: {
+  node: Node;
+  project: SerializedProject;
+  bp: BreakpointId;
+  isText: boolean;
+  styles: StyleProps;
+  set: (patch: Partial<StyleProps>) => void;
+  ov: (...keys: (keyof StyleProps)[]) => boolean;
+  reset: (...keys: (keyof StyleProps)[]) => void;
+}) {
+  const textTarget = isText ? node : findFirstTextDescendant(project, node.id);
+  const textColorNode = textTarget;
+  const textColorStyles = textColorNode
+    ? resolveHoverAppearance(textColorNode, project, bp, textColorNode.effects?.hover)
+    : null;
+  const textColorOverridden = textColorNode ? hasHoverOverride(textColorNode.effects?.hover, "color") : false;
+
+  return (
+    <Section title="Appearance">
+      {textColorNode && (
+        <PropRow
+          label="Text color"
+          overridden={textColorOverridden}
+          onReset={() => {
+            if (textColorNode.id === node.id) reset("color");
+            else {
+              const target = project.nodes[textColorNode.id];
+              if (!target) return;
+              const base = ensureHoverEffect(target);
+              docActions.updateNode(textColorNode.id, { effects: { ...target.effects, hover: resetHoverStyleKeys(base, ["color"]) } });
+            }
+          }}
+        >
+          <ColorInput
+            value={textColorStyles?.color ?? "#111111"}
+            onChange={(c) => {
+              if (textColorNode.id === node.id) set({ color: c });
+              else setNodeHoverStyle(project, textColorNode.id, { color: c });
+            }}
+          />
+        </PropRow>
+      )}
+      {(node.type === "frame" || node.type === "instance") && (
+        <PropRow label="Fill" overridden={ov("fill")} onReset={() => reset("fill")}>
+          <ColorInput
+            value={
+              styles.fill?.type === "solid"
+                ? styles.fill.color
+                : styles.fill?.type === "linear" || styles.fill?.type === "radial"
+                  ? styles.fill.stops[0]?.color ?? "#FFFFFF"
+                  : "#FFFFFF"
+            }
+            onChange={(c) => set({ fill: { type: "solid", color: c } })}
+          />
+        </PropRow>
+      )}
+      {(node.type === "frame" || node.type === "image" || node.type === "instance") && (
+        <PropRow label="Radius" overridden={ov("radius")} onReset={() => reset("radius")}>
+          <NumberInput
+            value={typeof styles.radius === "number" ? styles.radius : (styles.radius?.tl ?? 0)}
+            min={0}
+            unit="px"
+            onChange={(v) => set({ radius: v })}
+          />
+        </PropRow>
+      )}
+    </Section>
+  );
+}
+
+function PropertyStateBar({
+  state,
+  onNormal,
+  onHover,
+  hoverDuration,
+  onDurationChange,
+}: {
+  state: "normal" | "hover";
+  onNormal: () => void;
+  onHover: () => void;
+  hoverDuration: number;
+  onDurationChange: (v: number) => void;
+}) {
+  return (
+    <div className="property-state-bar">
+      <div className="property-state-tabs">
+        <button className={`property-state-tab ${state === "normal" ? "active" : ""}`} onClick={onNormal}>
+          Normal
+        </button>
+        <button className={`property-state-tab ${state === "hover" ? "active" : ""}`} onClick={onHover}>
+          Hover
+        </button>
+      </div>
+      {state === "hover" && (
+        <PropRow label="Transition">
+          <NumberInput value={hoverDuration} min={0} step={0.05} unit="s" onChange={onDurationChange} />
+        </PropRow>
+      )}
+    </div>
+  );
+}
+
+function HoverMotionSection({ hover, onChange }: { hover: HoverEffect; onChange: (patch: Partial<HoverEffect>) => void }) {
+  return (
+    <Section title="Motion">
+      <PropRow label="Scale">
+        <NumberInput value={hover.scale ?? 1} min={0.1} max={3} step={0.01} unit="×" onChange={(v) => onChange({ scale: v === 1 ? undefined : v })} />
+      </PropRow>
+      <PropRow label="Lift Y">
+        <NumberInput value={hover.y ?? 0} step={1} unit="px" onChange={(v) => onChange({ y: v || undefined })} />
+      </PropRow>
+      <PropRow label="Rotate">
+        <NumberInput value={hover.rotate ?? 0} step={1} unit="°" onChange={(v) => onChange({ rotate: v || undefined })} />
+      </PropRow>
+      <PropRow label="Opacity">
+        <NumberInput
+          value={hover.opacity !== undefined ? Math.round(hover.opacity * 100) : 100}
+          min={0}
+          max={100}
+          unit="%"
+          onChange={(v) => onChange({ opacity: v === 100 ? undefined : v / 100 })}
+        />
+      </PropRow>
+    </Section>
+  );
+}
+
 const ENTRANCE_PRESETS: { value: EntrancePreset; label: string }[] = [
   { value: "none", label: "None" },
   { value: "fade", label: "Fade" },
@@ -1012,7 +1239,6 @@ function EffectsSection({ node }: { node: Node }) {
     docActions.updateNode(node.id, { effects: { ...fx, ...patch } });
   };
   const entrance = fx.entrance;
-  const hover = fx.hover;
 
   return (
     <Section title="Effects">
@@ -1051,32 +1277,6 @@ function EffectsSection({ node }: { node: Node }) {
               ]}
               onChange={(v) => setFx({ entrance: { ...entrance, onScroll: v === "scroll" } })}
             />
-          </PropRow>
-        </>
-      )}
-      <PropRow label="Hover">
-        <Segmented
-          value={hover ? "yes" : "no"}
-          options={[
-            { value: "no", label: "None" },
-            { value: "yes", label: "Custom" },
-          ]}
-          onChange={(v) => setFx({ hover: v === "yes" ? { scale: 1.03, duration: 0.2 } : undefined })}
-        />
-      </PropRow>
-      {hover && (
-        <>
-          <PropRow label="Scale">
-            <NumberInput value={hover.scale ?? 1} min={0.1} max={3} step={0.01} unit="×" onChange={(v) => setFx({ hover: { ...hover, scale: v } })} />
-          </PropRow>
-          <PropRow label="Lift Y">
-            <NumberInput value={hover.y ?? 0} step={1} unit="px" onChange={(v) => setFx({ hover: { ...hover, y: v || undefined } })} />
-          </PropRow>
-          <PropRow label="Opacity">
-            <NumberInput value={hover.opacity !== undefined ? Math.round(hover.opacity * 100) : 100} min={0} max={100} unit="%" onChange={(v) => setFx({ hover: { ...hover, opacity: v === 100 ? undefined : v / 100 } })} />
-          </PropRow>
-          <PropRow label="Duration">
-            <NumberInput value={hover.duration} min={0} step={0.05} unit="s" onChange={(v) => setFx({ hover: { ...hover, duration: v } })} />
           </PropRow>
         </>
       )}

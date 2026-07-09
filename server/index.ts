@@ -5,8 +5,11 @@ import fsp from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
-import { generateSite } from "../src/codegen/generate";
+import { buildCtx, generateSite } from "../src/codegen/generate";
+import { emitThumbnailHtml } from "../src/codegen/thumbnailHtml";
 import type { SerializedProject } from "../src/model/types";
+import { backfillMissingThumbnails, copyThumbnail, hasThumbnail, scheduleThumbnail, thumbnailPath } from "./thumbnail";
+import { createCodexRouter, streamCodexProgress } from "./codex";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
@@ -63,10 +66,21 @@ async function writeProjectToDisk(id: string, project: SerializedProject): Promi
   await fsp.writeFile(projectFile(id), JSON.stringify(project, null, 2), "utf8");
   try {
     await generateSite(project, path.join(dir, "site"));
+    const ctx = buildCtx(project);
+    await fsp.writeFile(path.join(dir, "thumbnail.html"), emitThumbnailHtml(ctx, PORT), "utf8");
   } catch (err) {
     console.error(`[codegen] failed for ${id}:`, err);
   }
+  scheduleThumbnail(id, () => readProject(id), dir, PORT);
 }
+
+app.get("/api/codex/events", streamCodexProgress);
+app.use("/api/codex", createCodexRouter({
+  rootDir: ROOT,
+  projectsDir: PROJECTS_DIR,
+  readProject,
+  writeProject: writeProjectToDisk,
+}));
 
 // ── Projects CRUD ────────────────────────────────────────────────────────────
 
@@ -77,7 +91,15 @@ app.get("/api/projects", async (_req, res) => {
     if (!entry.isDirectory()) continue;
     const project = await readProject(entry.name);
     if (project) {
-      projects.push({ ...project.meta, id: entry.name, pageCount: project.pages.length });
+      const dir = projectDir(entry.name);
+      const thumb = hasThumbnail(dir);
+      if (!thumb) scheduleThumbnail(entry.name, () => readProject(entry.name), dir, PORT, 500);
+      projects.push({
+        ...project.meta,
+        id: entry.name,
+        pageCount: project.pages.length,
+        hasThumbnail: thumb,
+      });
     }
   }
   projects.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
@@ -124,9 +146,10 @@ app.post("/api/projects/:id/duplicate", async (req, res) => {
   const dstAssets = path.join(projectDir(newId), "assets");
   if (fs.existsSync(srcAssets)) {
     await fsp.cp(srcAssets, dstAssets, { recursive: true });
-    // regenerate so the site copies assets too
-    await writeProjectToDisk(newId, project);
   }
+  await copyThumbnail(projectDir(req.params.id), projectDir(newId));
+  // regenerate so the site copies assets too
+  await writeProjectToDisk(newId, project);
   res.json({ id: newId });
 });
 
@@ -169,6 +192,28 @@ app.use("/project-assets/:id", (req, res, next) => {
   express.static(dir)(req, res, next);
 });
 
+// serve generated styles for thumbnail screenshots
+app.get("/thumb-styles/:id/styles.css", (req, res) => {
+  const file = path.join(projectDir(req.params.id), "site", "src", "styles.css");
+  if (!fs.existsSync(file)) return res.status(404).end();
+  res.type("text/css").sendFile(file);
+});
+
+// serve static thumbnail HTML (uses generated styles.css)
+app.get("/thumb-page/:id", (req, res) => {
+  const file = path.join(projectDir(req.params.id), "thumbnail.html");
+  if (!fs.existsSync(file)) return res.status(404).end();
+  res.sendFile(file);
+});
+
+// serve project thumbnails for the picker
+app.get("/project-thumbnails/:id", (req, res) => {
+  const file = thumbnailPath(projectDir(req.params.id));
+  if (!fs.existsSync(file)) return res.status(404).end();
+  res.setHeader("Cache-Control", "no-cache");
+  res.sendFile(file);
+});
+
 // ── Publish (production build of the generated site) ────────────────────────
 
 app.post("/api/projects/:id/publish", async (req, res) => {
@@ -208,4 +253,13 @@ app.use("/published/:id", (req, res, next) => {
 app.listen(PORT, () => {
   console.log(`[server] projects dir: ${PROJECTS_DIR}`);
   console.log(`[server] listening on http://localhost:${PORT}`);
+  backfillMissingThumbnails(
+    async () => {
+      const entries = await fsp.readdir(PROJECTS_DIR, { withFileTypes: true }).catch(() => []);
+      return entries.filter((e) => e.isDirectory()).map((e) => e.name);
+    },
+    readProject,
+    projectDir,
+    PORT,
+  ).catch((err) => console.error("[thumbnail] backfill failed:", err));
 });

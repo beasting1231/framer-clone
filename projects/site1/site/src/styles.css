@@ -193,7 +193,7 @@ textarea {
 .hero-qUrO {
   align-self: stretch;
   width: auto;
-  height: 100vh;
+  height: 688px;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -219,6 +219,7 @@ textarea {
   letter-spacing: -1.5px;
   color: #111111;
   text-align: center;
+  text-transform: uppercase;
   white-space: pre-wrap;
 }
 
@@ -339,7 +340,7 @@ textarea {
   position: relative;
   display: grid;
   gap: 20px;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   align-items: stretch;
 }
 
@@ -483,6 +484,57 @@ textarea {
 }
 
 .body-5CAK {
+  align-self: stretch;
+  width: auto;
+  height: fit-content;
+  position: relative;
+  font-family: "Inter", sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.6;
+  color: #666677;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.responsive-copy-bY8C {
+  width: 100%;
+  height: fit-content;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 28px 28px 28px 28px;
+  background-color: #ffffff;
+  border: 1px solid #eaeaee;
+  border-radius: 16px;
+}
+
+.icon-EY5q {
+  width: 44px;
+  height: 44px;
+  position: relative;
+  background-color: #111111;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.title-6yco {
+  width: fit-content;
+  height: fit-content;
+  position: relative;
+  font-family: "Inter", sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #111111;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.body-XXwG {
   align-self: stretch;
   width: auto;
   height: fit-content;

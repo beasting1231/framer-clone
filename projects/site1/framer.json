@@ -4,7 +4,7 @@
     "id": "site1",
     "name": "site1",
     "createdAt": "2026-07-09T14:01:59.465Z",
-    "updatedAt": "2026-07-09T15:31:27.806Z"
+    "updatedAt": "2026-07-09T17:01:27.265Z"
   },
   "pages": [
     {
@@ -302,8 +302,16 @@
       "tag": "button",
       "effects": {
         "hover": {
-          "scale": 1.03,
-          "duration": 0.2
+          "duration": 0.2,
+          "styles": {
+            "radius": 26,
+            "align": "center",
+            "fill": {
+              "type": "solid",
+              "color": "#e6e6e6"
+            }
+          },
+          "rotate": 6
         },
         "pressScale": 0.97
       }
@@ -349,9 +357,8 @@
             "mode": "fill"
           },
           "height": {
-            "mode": "viewport",
-            "value": 100,
-            "unit": "vh"
+            "mode": "fixed",
+            "value": 688
           },
           "layout": "stack",
           "direction": "column",
@@ -371,7 +378,13 @@
           }
         }
       },
-      "tag": "section"
+      "tag": "section",
+      "effects": {
+        "hover": {
+          "duration": 0.2,
+          "styles": {}
+        }
+      }
     },
     "9hrKTL0gil": {
       "id": "9hrKTL0gil",
@@ -394,7 +407,8 @@
           "color": "#111111",
           "textAlign": "center",
           "letterSpacing": -1.5,
-          "maxWidth": 760
+          "maxWidth": 760,
+          "textTransform": "uppercase"
         },
         "tablet": {
           "fontSize": 48
@@ -403,7 +417,7 @@
           "fontSize": 34
         }
       },
-      "text": "Basting Solutions LLC",
+      "text": "hero title",
       "textTag": "h1",
       "effects": {
         "entrance": {
@@ -717,7 +731,8 @@
       "children": [
         "IDYu1stLvf",
         "aSBBFI1_3u",
-        "82GrKLjbbP"
+        "82GrKLjbbP",
+        "bY8CvXUPSt"
       ],
       "styles": {
         "desktop": {
@@ -731,7 +746,7 @@
           "layout": "grid",
           "fill": null,
           "overflow": "visible",
-          "gridColumns": 3,
+          "gridColumns": 4,
           "gap": 20,
           "maxWidth": 1080
         },
@@ -2426,6 +2441,138 @@
         }
       },
       "text": "Contact",
+      "textTag": "p"
+    },
+    "bY8CvXUPSt": {
+      "id": "bY8CvXUPSt",
+      "type": "frame",
+      "name": "Responsive copy",
+      "parent": "e4Wn1P9MoE",
+      "children": [
+        "EY5qCPh0oG",
+        "6ycoQNnYWi",
+        "XXwG8k2GHP"
+      ],
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "fill"
+          },
+          "height": {
+            "mode": "fit"
+          },
+          "layout": "stack",
+          "direction": "column",
+          "gap": 12,
+          "align": "start",
+          "justify": "start",
+          "padding": {
+            "top": 28,
+            "right": 28,
+            "bottom": 28,
+            "left": 28
+          },
+          "fill": {
+            "type": "solid",
+            "color": "#FFFFFF"
+          },
+          "radius": 16,
+          "border": {
+            "width": 1,
+            "color": "#EAEAEE",
+            "style": "solid"
+          }
+        }
+      },
+      "tag": "div",
+      "effects": {
+        "entrance": {
+          "preset": "slide-up",
+          "duration": 0.6,
+          "delay": 0,
+          "onScroll": true
+        },
+        "hover": {
+          "y": -4,
+          "duration": 0.2
+        }
+      }
+    },
+    "EY5qCPh0oG": {
+      "id": "EY5qCPh0oG",
+      "type": "frame",
+      "name": "Icon",
+      "parent": "bY8CvXUPSt",
+      "children": [],
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "fixed",
+            "value": 44
+          },
+          "height": {
+            "mode": "fixed",
+            "value": 44
+          },
+          "layout": "absolute",
+          "fill": {
+            "type": "solid",
+            "color": "#111111"
+          },
+          "overflow": "hidden",
+          "radius": 12
+        }
+      },
+      "tag": "div"
+    },
+    "6ycoQNnYWi": {
+      "id": "6ycoQNnYWi",
+      "type": "text",
+      "name": "Title",
+      "parent": "bY8CvXUPSt",
+      "children": [],
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "fit"
+          },
+          "height": {
+            "mode": "fit"
+          },
+          "fontFamily": "Inter",
+          "fontSize": 18,
+          "fontWeight": 600,
+          "lineHeight": 1.4,
+          "color": "#111111",
+          "textAlign": "left"
+        }
+      },
+      "text": "Responsive",
+      "textTag": "h3"
+    },
+    "XXwG8k2GHP": {
+      "id": "XXwG8k2GHP",
+      "type": "text",
+      "name": "Body",
+      "parent": "bY8CvXUPSt",
+      "children": [],
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "fill"
+          },
+          "height": {
+            "mode": "fit"
+          },
+          "fontFamily": "Inter",
+          "fontSize": 14,
+          "fontWeight": 400,
+          "lineHeight": 1.6,
+          "color": "#666677",
+          "textAlign": "left"
+        }
+      },
+      "text": "Desktop, tablet and phone breakpoints with cascading overrides.",
       "textTag": "p"
     }
   },

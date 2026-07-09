@@ -26,6 +26,8 @@ interface EditorState {
   selection: string[];
   hoveredId: string | null;
   editingTextId: string | null;
+  /** normal = base styles, hover = edit hover-state overrides */
+  propertyState: "normal" | "hover";
 
   tool: Tool;
   leftTab: LeftTab;
@@ -51,6 +53,7 @@ interface EditorState {
   clearSelection: () => void;
   setHovered: (id: string | null) => void;
   setEditingText: (id: string | null) => void;
+  setPropertyState: (state: "normal" | "hover") => void;
   setTool: (tool: Tool) => void;
   setLeftTab: (tab: LeftTab) => void;
   setInsertOpen: (open: boolean) => void;
@@ -71,6 +74,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   selection: [],
   hoveredId: null,
   editingTextId: null,
+  propertyState: "normal",
 
   tool: "select",
   leftTab: "layers",
@@ -87,7 +91,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   publishState: { status: "idle" },
 
   setScreen: (screen) => set({ screen }),
-  setContext: (context) => set({ context, selection: [], hoveredId: null, editingTextId: null, assetPick: null }),
+  setContext: (context) => set({ context, selection: [], hoveredId: null, editingTextId: null, assetPick: null, propertyState: "normal" }),
   setBreakpoint: (breakpoint) => set({ breakpoint }),
 
   select: (ids, additive = false) => {
@@ -108,6 +112,7 @@ export const useEditor = create<EditorState>((set, get) => ({
   clearSelection: () => set({ selection: [], editingTextId: null, assetPick: null }),
   setHovered: (hoveredId) => set({ hoveredId }),
   setEditingText: (editingTextId) => set({ editingTextId }),
+  setPropertyState: (propertyState) => set({ propertyState }),
   setTool: (tool) => set({ tool, assetPick: null }),
   setLeftTab: (leftTab) => {
     // Leaving Assets while picking cancels the pick.

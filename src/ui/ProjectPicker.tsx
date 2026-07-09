@@ -5,6 +5,30 @@ import { useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
 import { IconDots, IconPlus } from "./icons";
 
+function ProjectThumb({ id, name, updatedAt, hasThumbnail }: { id: string; name: string; updatedAt: string; hasThumbnail?: boolean }) {
+  const [failed, setFailed] = useState(false);
+  const letter = name.charAt(0).toUpperCase();
+
+  useEffect(() => {
+    setFailed(false);
+  }, [updatedAt, hasThumbnail]);
+
+  if (failed && !hasThumbnail) {
+    return <div className="thumb">{letter}</div>;
+  }
+
+  return (
+    <div className="thumb">
+      <img
+        src={`/project-thumbnails/${id}?t=${encodeURIComponent(updatedAt)}`}
+        alt=""
+        draggable={false}
+        onError={() => setFailed(true)}
+      />
+    </div>
+  );
+}
+
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60000);
@@ -34,7 +58,16 @@ export function ProjectPicker() {
       .catch((e) => setError(String(e.message ?? e)));
   };
 
-  useEffect(refresh, []);
+  useEffect(() => {
+    refresh();
+    // Thumbnails generate in the background — poll until they appear.
+    const interval = setInterval(refresh, 3000);
+    const stop = setTimeout(() => clearInterval(interval), 30000);
+    return () => {
+      clearInterval(interval);
+      clearTimeout(stop);
+    };
+  }, []);
 
   const openProject = async (id: string) => {
     const project = await api.getProject(id);
@@ -56,36 +89,24 @@ export function ProjectPicker() {
     <div className="picker" onClick={() => setMenuFor(null)}>
       <div className="picker-inner">
         <h1>Projects</h1>
-        <p className="subtitle">
-          Stored on disk in the <code>projects/</code> folder — every save regenerates a readable React codebase in{" "}
-          <code>projects/&lt;name&gt;/site</code>.
-        </p>
         {error && (
           <p className="subtitle" style={{ color: "var(--danger)" }}>
             Could not reach the local server ({error}). Is <code>npm run dev</code> running?
           </p>
         )}
         <div className="picker-grid">
-          <button className="project-card new" onClick={createProject}>
-            <IconPlus style={{ width: 22, height: 22 }} />
-            New project
-          </button>
+          <div className="project-item">
+            <button className="project-card new" onClick={createProject}>
+              <IconPlus style={{ width: 22, height: 22 }} />
+              New project
+            </button>
+          </div>
           {(projects ?? []).map((p) => (
-            <div
-              key={p.id}
-              className={`project-card ${menuFor === p.id ? "project-card--menu-open" : ""}`}
-              onClick={() => openProject(p.id)}
-            >
-              <div className="thumb">{p.name.charAt(0).toUpperCase()}</div>
-              <div className="card-body">
-                <div>
-                  <div className="name">{p.name}</div>
-                  <div className="meta">
-                    {p.pageCount} page{p.pageCount === 1 ? "" : "s"} · {timeAgo(p.updatedAt)}
-                  </div>
-                </div>
+            <div key={p.id} className={`project-item ${menuFor === p.id ? "project-item--menu-open" : ""}`}>
+              <div className="project-card" onClick={() => openProject(p.id)}>
+                <ProjectThumb id={p.id} name={p.name} updatedAt={p.updatedAt} hasThumbnail={p.hasThumbnail} />
                 <button
-                  className="icon-btn"
+                  className="project-card-menu-btn"
                   onClick={(e) => {
                     e.stopPropagation();
                     setMenuFor(menuFor === p.id ? null : p.id);
@@ -95,44 +116,48 @@ export function ProjectPicker() {
                 </button>
                 {menuFor === p.id && (
                   <div className="context-menu project-card-menu" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    className="context-item"
-                    onClick={async () => {
-                      await api.duplicateProject(p.id);
-                      setMenuFor(null);
-                      refresh();
-                    }}
-                  >
-                    Duplicate
-                  </button>
-                  <button
-                    className="context-item"
-                    onClick={async () => {
-                      const name = prompt("Rename project", p.name);
-                      if (name) {
-                        await api.renameProject(p.id, name);
+                    <button
+                      className="context-item"
+                      onClick={async () => {
+                        await api.duplicateProject(p.id);
+                        setMenuFor(null);
                         refresh();
-                      }
-                      setMenuFor(null);
-                    }}
-                  >
-                    Rename
-                  </button>
-                  <div className="context-divider" />
-                  <button
-                    className="context-item danger"
-                    onClick={async () => {
-                      if (confirm(`Delete "${p.name}"? This removes the folder from disk.`)) {
-                        await api.deleteProject(p.id);
-                        refresh();
-                      }
-                      setMenuFor(null);
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
+                      }}
+                    >
+                      Duplicate
+                    </button>
+                    <button
+                      className="context-item"
+                      onClick={async () => {
+                        const name = prompt("Rename project", p.name);
+                        if (name) {
+                          await api.renameProject(p.id, name);
+                          refresh();
+                        }
+                        setMenuFor(null);
+                      }}
+                    >
+                      Rename
+                    </button>
+                    <div className="context-divider" />
+                    <button
+                      className="context-item danger"
+                      onClick={async () => {
+                        if (confirm(`Delete "${p.name}"? This removes the folder from disk.`)) {
+                          await api.deleteProject(p.id);
+                          refresh();
+                        }
+                        setMenuFor(null);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 )}
+              </div>
+              <div className="project-label">
+                <span className="project-name">{p.name}</span>
+                <span className="project-edited">{timeAgo(p.updatedAt)}</span>
               </div>
             </div>
           ))}

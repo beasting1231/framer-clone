@@ -7,6 +7,7 @@ import { LeftPanel } from "./LeftPanel";
 import { TimelinePanel } from "./TimelinePanel";
 import { PropertiesPanel } from "@/properties/PropertiesPanel";
 import { copySelection, cutSelection, pasteClipboard } from "@/canvas/clipboard";
+import { CodexChat } from "./CodexChat";
 
 export function EditorShell() {
   useKeyboardShortcuts();
@@ -19,6 +20,7 @@ export function EditorShell() {
         <PropertiesPanel />
       </div>
       <TimelinePanel />
+      <CodexChat />
     </div>
   );
 }

@@ -14,6 +14,7 @@ import {
 } from "../model/types";
 import { nodeStyles } from "../model/resolve";
 import { stylesToCss, type CssContext } from "../model/css";
+import { getHoverStyles, resolveHoverAppearance } from "../model/hover";
 import { clipMotionAttrs } from "../model/animation";
 import { cssDeclarations, cssDiff } from "./cssText";
 
@@ -23,7 +24,7 @@ import { cssDeclarations, cssDiff } from "./cssText";
 // the canvas.
 // ─────────────────────────────────────────────────────────────────────────────
 
-interface GenCtx {
+export interface GenCtx {
   project: SerializedProject;
   /** node id → css class name */
   classNames: Map<string, string>;
@@ -69,7 +70,7 @@ function uniqueNamer(): (base: string) => string {
   };
 }
 
-function buildCtx(project: SerializedProject): GenCtx {
+export function buildCtx(project: SerializedProject): GenCtx {
   const classNames = new Map<string, string>();
   for (const [id, node] of Object.entries(project.nodes)) {
     classNames.set(id, `${slug(node.name)}-${id.slice(0, 4)}`);
@@ -150,14 +151,36 @@ function generateCss(ctx: GenCtx): string {
     sections.push(`.${cls} {\n${cssDeclarations(desktop)}\n}`);
     if (Object.keys(tablet).length > 0) tabletRules.push(`  .${cls} {\n${cssDeclarations(tablet, "    ")}\n  }`);
     if (Object.keys(phone).length > 0) phoneRules.push(`  .${cls} {\n${cssDeclarations(phone, "    ")}\n  }`);
-    // hover fill/color as CSS
+    // hover appearance as CSS :hover rules
     const hover = node.effects?.hover;
-    if (hover && (hover.fill || hover.color)) {
-      const decls: string[] = [];
-      if (hover.fill && hover.fill.type === "solid") decls.push(`  background-color: ${hover.fill.color};`);
-      if (hover.color) decls.push(`  color: ${hover.color};`);
-      sections.push(`.${cls}:hover {\n${decls.join("\n")}\n}`);
-      sections.push(`.${cls} {\n  transition: background-color ${hover.duration}s, color ${hover.duration}s;\n}`);
+    if (hover) {
+      const hs = getHoverStyles(hover);
+      const parentCtx = parentCtxAt(ctx, node, "desktop");
+      const baseProps = nodeStyles(node, project, "desktop");
+      const hoverProps = resolveHoverAppearance(node, project, "desktop", hover);
+      if (Object.keys(hs).length > 0) {
+        const baseCss = stylesToCss(baseProps, node, parentCtx);
+        const hoverCss = stylesToCss(hoverProps, node, parentCtx);
+        const diff = cssDiff(baseCss, hoverCss);
+        if (Object.keys(diff).length > 0) {
+          sections.push(`.${cls}:hover {\n${cssDeclarations(diff)}\n}`);
+        }
+      }
+      const hasMotion = hover.scale !== undefined || hover.y !== undefined || hover.rotate !== undefined || hover.opacity !== undefined;
+      if (Object.keys(hs).length > 0 || hasMotion) {
+        const props = [
+          "background-color",
+          "color",
+          "border-radius",
+          "box-shadow",
+          "opacity",
+          "filter",
+          "backdrop-filter",
+          "border-color",
+          "transform",
+        ];
+        sections.push(`.${cls} {\n  transition: ${props.map((p) => `${p} ${hover.duration}s ease`).join(", ")};\n}`);
+      }
     }
   };
 

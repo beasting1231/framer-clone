@@ -128,8 +128,15 @@ export function stylesToCss(props: StyleProps, node: Node, ctx: CssContext = {})
     css.position = "relative";
   }
   if (props.sticky && !ctx.editor) {
-    css.position = "sticky";
+    css.position = "fixed";
     css.top = props.stickyOffset ?? 0;
+    if (props.width?.mode === "fill" || props.width?.mode === "relative" || !props.width) {
+      css.left = 0;
+      css.right = 0;
+    } else if (css.left === undefined) {
+      css.left = 0;
+    }
+    css.zIndex = props.zIndex ?? 1000;
   }
   if (props.zIndex !== undefined) css.zIndex = props.zIndex;
   if (props.rotation) {
@@ -157,7 +164,7 @@ export function stylesToCss(props: StyleProps, node: Node, ctx: CssContext = {})
       css.alignItems = ALIGN_MAP[props.align ?? "stretch"];
     } else {
       // absolute container: children position against it
-      css.position = css.position === "absolute" || css.position === "sticky" ? css.position : "relative";
+      css.position = css.position === "absolute" || css.position === "fixed" ? css.position : "relative";
     }
     if (props.padding) {
       const p = props.padding;

@@ -1,8 +1,9 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { BREAKPOINTS, type BreakpointId, type CmsCollection, type CmsEntry, type InstanceOverride, type Node, type Page, type SerializedProject } from "@/model/types";
 import { buildClipMotionMap } from "@/model/animation";
+import { getHoverStyles } from "@/model/hover";
 import { nodeStyles } from "@/model/resolve";
-import { stylesToCss, type CssContext } from "@/model/css";
+import { stylesToCss, fillToCss, shadowToCss, type CssContext } from "@/model/css";
 import { useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
 import { IconClose, IconDesktop, IconFullWidth, IconPhone, IconRefresh, IconTablet } from "@/ui/icons";
@@ -93,11 +94,19 @@ function motionFor(node: Node, skipEntrance = false): Record<string, unknown> {
   if (hover) {
     const wh: Record<string, unknown> = {};
     if (hover.scale !== undefined) wh.scale = hover.scale;
-    if (hover.opacity !== undefined) wh.opacity = hover.opacity;
     if (hover.rotate !== undefined) wh.rotate = hover.rotate;
     if (hover.y !== undefined) wh.y = hover.y;
-    if (hover.fill?.type === "solid") wh.backgroundColor = hover.fill.color;
-    if (hover.color) wh.color = hover.color;
+    const hs = getHoverStyles(hover);
+    if (hs.fill) Object.assign(wh, fillToCss(hs.fill));
+    if (hs.color) wh.color = hs.color;
+    if (hs.radius !== undefined) {
+      wh.borderRadius = typeof hs.radius === "number" ? hs.radius : `${hs.radius.tl}px ${hs.radius.tr}px ${hs.radius.br}px ${hs.radius.bl}px`;
+    }
+    if (hs.shadows?.length) wh.boxShadow = shadowToCss(hs.shadows);
+    if (hs.opacity !== undefined) wh.opacity = hs.opacity;
+    if (hs.blur) wh.filter = `blur(${hs.blur}px)`;
+    if (hs.backdropBlur) wh.backdropFilter = `blur(${hs.backdropBlur}px)`;
+    if (hover.opacity !== undefined) wh.opacity = hover.opacity;
     if (Object.keys(wh).length > 0) {
       out.whileHover = { ...wh, transition: { duration: hover.duration } };
     }
