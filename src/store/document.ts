@@ -39,12 +39,14 @@ interface DocumentState {
   project: SerializedProject | null;
   projectId: string | null;
   saveState: SaveState;
+  agentBusy: boolean;
   undoStack: DocSlice[];
   redoStack: DocSlice[];
 
   // lifecycle
   open: (id: string, project: SerializedProject) => void;
   close: () => void;
+  setAgentBusy: (busy: boolean) => void;
 
   /**
    * Apply a mutation to the project. `commit` (default true) pushes an undo
@@ -56,6 +58,7 @@ interface DocumentState {
   commitGesture: (before: DocSlice | null) => void;
   undo: () => void;
   redo: () => void;
+  applyAgentProject: (project: SerializedProject) => void;
   flushSave: () => Promise<void>;
 }
 
@@ -89,6 +92,7 @@ export const useDocument = create<DocumentState>((set, get) => ({
   project: null,
   projectId: null,
   saveState: "saved",
+  agentBusy: false,
   undoStack: [],
   redoStack: [],
 
@@ -104,8 +108,11 @@ export const useDocument = create<DocumentState>((set, get) => ({
     set({ project: null, projectId: null, undoStack: [], redoStack: [] });
   },
 
+  setAgentBusy: (agentBusy) => set({ agentBusy }),
+
   mutate: (fn, commit = true) => {
-    const { project, undoStack } = get();
+    const { project, undoStack, agentBusy } = get();
+    if (agentBusy) return;
     if (!project) return;
     const next = { ...project };
     if (commit) {
@@ -159,6 +166,20 @@ export const useDocument = create<DocumentState>((set, get) => ({
       project: { ...project, ...structuredClone(next) },
     });
     scheduleSave(get, set);
+  },
+
+  applyAgentProject: (agentProject) => {
+    const { project, undoStack } = get();
+    if (!project) return;
+    agentProject.animations ??= [];
+    migrateAnimationClips(agentProject.animations);
+    set({
+      project: agentProject,
+      saveState: "saved",
+      agentBusy: false,
+      undoStack: [...undoStack.slice(-MAX_HISTORY + 1), snapshotOf(project)],
+      redoStack: [],
+    });
   },
 
   flushSave: async () => {

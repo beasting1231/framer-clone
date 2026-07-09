@@ -1,4 +1,4 @@
-import type { ProjectMeta, SerializedProject } from "@/model/types";
+import type { BreakpointId, ProjectMeta, SerializedProject } from "@/model/types";
 
 export interface ProjectListItem extends ProjectMeta {
   pageCount: number;
@@ -23,6 +23,10 @@ export interface CodexSendResult {
   mode?: string;
   output: string;
   changedFiles?: string[];
+  changedNodeIds?: string[];
+  patchApplied?: boolean;
+  project?: SerializedProject;
+  revision?: string;
   threadId?: string;
   error?: string;
   unauthenticated?: boolean;
@@ -108,7 +112,7 @@ export const api = {
   codexStartSession: (projectId: string) =>
     request<{ ok: boolean; mode: string; startedAt: number; threadId?: string }>(`/api/codex/projects/${projectId}/start-session`, { method: "POST" }),
 
-  codexSend: (projectId: string, body: { prompt: string; conversation?: CodexMessage[]; selection?: string[]; model?: string; reasoning?: string }) =>
+  codexSend: (projectId: string, body: { prompt: string; conversation?: CodexMessage[]; selection?: string[]; model?: string; reasoning?: string; projectHash?: string; currentPageId?: string; breakpoint?: BreakpointId }) =>
     request<CodexSendResult>(`/api/codex/projects/${projectId}/send`, { method: "POST", body: JSON.stringify(body) }),
 
   codexStop: (projectId: string) => request<{ ok: true }>(`/api/codex/projects/${projectId}/stop`, { method: "POST" }),

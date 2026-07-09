@@ -1,10 +1,13 @@
 import fs from "node:fs";
 import fsp from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import type { Request, Response, Router } from "express";
 import express from "express";
 import type { SerializedProject } from "../src/model/types";
+import { hashProject } from "../src/model/projectHash";
+import { applyProjectPatch, parseProjectPatch, validateProject, type ProjectPatch } from "../src/model/projectPatch";
 
 type CodexRunResult = {
   code: number;
@@ -12,6 +15,17 @@ type CodexRunResult = {
   stderr: string;
   output: string;
   threadId: string;
+};
+
+type CodexSendBody = {
+  prompt?: string;
+  conversation?: unknown;
+  selection?: unknown;
+  model?: string;
+  reasoning?: string;
+  projectHash?: string;
+  currentPageId?: string;
+  breakpoint?: string;
 };
 
 type CodexProgress = {
@@ -68,7 +82,8 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
   router.post("/projects/:id/send", async (req, res) => {
     const projectId = req.params.id;
     const projectPath = assertProjectPath(projectId, options.projectsDir);
-    const prompt = String((req.body as { prompt?: string }).prompt || "").trim();
+    const body = req.body as CodexSendBody;
+    const prompt = String(body.prompt || "").trim();
     if (!prompt) return res.status(400).json({ ok: false, error: "Enter a message." });
 
     const status = await getCodexStatus();
@@ -77,50 +92,67 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
     const session = getSession(projectId, projectPath);
     if (session.busy) return res.status(409).json({ ok: false, error: "Codex is already running for this project." });
 
-    const before = await snapshotProjectFiles(projectPath);
+    const project = await options.readProject(projectId);
+    if (!project) return res.status(404).json({ ok: false, error: "Project not found." });
+    const currentHash = hashProject(project);
+    if (body.projectHash && body.projectHash !== currentHash) {
+      return res.status(409).json({ ok: false, error: "Project changed before Codex started. Save and retry." });
+    }
+    const beforeValidation = validateProject(project);
+    if (!beforeValidation.ok) {
+      return res.status(400).json({ ok: false, error: `Project is invalid before AI edit: ${beforeValidation.errors.join(" ")}` });
+    }
     const contextualPrompt = await buildFramerCodexPrompt(prompt, {
       projectId,
       projectPath,
-      project: await options.readProject(projectId),
-      conversation: (req.body as { conversation?: unknown }).conversation,
-      selection: (req.body as { selection?: unknown }).selection,
+      project,
+      conversation: body.conversation,
+      selection: body.selection,
+      currentPageId: body.currentPageId,
+      breakpoint: body.breakpoint,
     });
 
     session.busy = true;
     emitProgress(res, { type: "status", text: "Thinking...", projectId });
-    const result = await runCodex(
-      buildCodexExecArgs({
-        cwd: projectPath,
-        prompt: contextualPrompt,
-        threadId: session.threadId,
-        model: sanitizeCodexOption((req.body as { model?: string }).model),
-        reasoning: sanitizeCodexOption((req.body as { reasoning?: string }).reasoning, "medium"),
-      }),
-      {
-        cwd: projectPath,
-        timeoutMs: 0,
-        json: true,
-        session,
-        onProgress: (payload) => emitProgress(res, { ...payload, projectId }),
-      },
-    );
+    const result = await runCodexForPatch({
+      prompt: contextualPrompt,
+      project,
+      projectPath,
+      session,
+      projectId,
+      model: sanitizeCodexOption(body.model),
+      reasoning: sanitizeCodexOption(body.reasoning, "medium"),
+      onProgress: (payload) => emitProgress(res, { ...payload, projectId }),
+    });
     session.busy = false;
     session.child = null;
     if (result.threadId) session.threadId = result.threadId;
 
-    const changedFiles = await getChangedProjectFiles(projectPath, before);
-    if (changedFiles.includes("framer.json")) {
-      const project = await readProjectFile(projectPath);
-      if (project) await options.writeProject(projectId, project);
+    if (!result.ok) {
+      return res.json({
+        ok: false,
+        mode: "patch",
+        output: result.error,
+        changedFiles: [],
+        changedNodeIds: [],
+        patchApplied: false,
+        threadId: session.threadId,
+        error: result.error,
+      });
     }
+    if (result.patch.ops.length > 0) await options.writeProject(projectId, result.project);
 
     res.json({
-      ok: result.code === 0,
-      mode: "exec-json",
-      output: result.output || result.stderr || result.stdout || (result.code === 0 ? "Done." : "Codex failed."),
-      changedFiles,
+      ok: true,
+      mode: "patch",
+      output: result.summary,
+      changedFiles: result.patch.ops.length > 0 ? ["framer.json"] : [],
+      changedNodeIds: result.changedNodeIds,
+      patchApplied: result.patch.ops.length > 0,
+      project: result.project,
+      revision: hashProject(result.project),
       threadId: session.threadId,
-      error: result.code === 0 ? "" : result.output || result.stderr || `Codex exited with code ${result.code}.`,
+      error: "",
     });
   });
 
@@ -164,7 +196,16 @@ async function getCodexStatus() {
 
 async function buildFramerCodexPrompt(
   userPrompt: string,
-  context: { projectId: string; projectPath: string; project: SerializedProject | null; conversation: unknown; selection: unknown },
+  context: {
+    projectId: string;
+    projectPath: string;
+    project: SerializedProject | null;
+    conversation: unknown;
+    selection: unknown;
+    currentPageId?: string;
+    breakpoint?: string;
+    retryError?: string;
+  },
 ) {
   const project = context.project;
   const selectedIds = Array.isArray(context.selection) ? context.selection.map(String).slice(0, 20) : [];
@@ -182,20 +223,36 @@ async function buildFramerCodexPrompt(
   const conversation = normalizeConversation(context.conversation);
 
   return [
-    `You are the in-editor coding agent for the local Framer-style project "${project?.meta.name || context.projectId}".`,
+    `You are the in-editor AI agent for the local Framer-style visual editor project "${project?.meta.name || context.projectId}".`,
     `Workspace: ${context.projectPath}`,
+    `Current page: ${context.currentPageId || "unknown"}`,
+    `Current breakpoint: ${context.breakpoint || "desktop"}`,
     "",
-    "Project rules:",
-    "- The editor source of truth is framer.json. For visual/content changes that should appear in the editor, update framer.json first.",
-    "- The generated React site under site/ is output from the project model. Do not make editor-visible changes only in site/ unless the user explicitly asks for generated-site code.",
-    "- Keep JSON valid and preserve existing schema fields, ids, components, CMS collections, assets, color styles, text styles, and animations unless the user asks to change them.",
-    "- Prefer small, targeted edits. Do not rewrite the whole project file for a narrow change.",
-    "- After editing framer.json, stop. The server regenerates the generated site from the project model.",
-    "- If the user asks a question, answer from the project files and selected-node context without changing files.",
+    "Your job:",
+    "- You are wrapped inside a visual editor, not a normal coding repo.",
+    "- The project model is the source of truth. Generated React files under site/ are output-only.",
+    "- Never edit files directly. Return only a JSON ProjectPatch object.",
+    "- Every visual/content change must remain editable in the canvas, layers, and properties panel.",
+    "- Prefer small targeted operations over broad rewrites.",
+    "- If the user asks a question or no change is needed, return a JSON object with a helpful summary and an empty ops array.",
+    "- If you are unsure how to make a safe editor-model change, return an empty ops array and explain why in summary.",
+    "",
+    "Allowed response shape:",
+    JSON.stringify(projectPatchSchemaExample(), null, 2),
+    "",
+    "Allowed operation notes:",
+    "- opsJson must be a JSON-encoded string containing an array of ProjectPatch operations.",
+    "- For no-change answers, set opsJson to \"[]\" and put the answer in summary.",
+    "- setText only targets text nodes.",
+    "- setStyles uses desktop/tablet/phone and StyleProps keys from the project model.",
+    "- insertTemplate uses existing insert-tab TemplateId values.",
+    "- insertNodeTree must include a complete editable node subtree with parent/children links inside that subtree.",
+    "- Do not include markdown fences. Return JSON only.",
     "",
     project ? `Pages: ${project.pages.map((page) => `${page.name} (${page.path}, root ${page.rootId})`).join(", ")}` : "",
     selected.length ? `Selected nodes:\n${JSON.stringify(selected, null, 2)}` : "",
     conversation.length ? `Recent chat:\n${conversation.map((m) => `${m.role}: ${m.text}`).join("\n")}` : "",
+    context.retryError ? `Previous patch was rejected. Return one corrected ProjectPatch. Rejection reason: ${context.retryError}` : "",
     "",
     "Current user request:",
     userPrompt,
@@ -217,6 +274,106 @@ function normalizeConversation(value: unknown) {
     })
     .filter((message) => message.text);
 }
+
+function projectPatchSchemaExample() {
+  return {
+    summary: "Short human-readable answer or change summary.",
+    opsJson: JSON.stringify([
+      { op: "setText", nodeId: "selectedTextNodeId", text: "New text" },
+      { op: "setStyles", nodeIds: ["nodeId"], breakpoint: "desktop", styles: { fontSize: 48, color: "#111111" } },
+      { op: "insertTemplate", templateId: "section-hero", parentId: "pageRootId", index: 1 },
+    ]),
+  };
+}
+
+async function runCodexForPatch(options: {
+  prompt: string;
+  project: SerializedProject;
+  projectPath: string;
+  session: CodexSession;
+  projectId: string;
+  model?: string;
+  reasoning: string;
+  onProgress: (payload: CodexProgress) => void;
+}): Promise<
+  | { ok: true; patch: ProjectPatch; project: SerializedProject; changedNodeIds: string[]; summary: string; threadId: string }
+  | { ok: false; error: string; threadId: string }
+> {
+  const schemaPath = await writeProjectPatchSchema();
+  let prompt = options.prompt;
+  let lastThreadId = options.session.threadId;
+  let lastError = "";
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const result = await runCodex(
+      buildCodexExecArgs({
+        cwd: options.projectPath,
+        prompt,
+        threadId: options.session.threadId,
+        model: options.model,
+        reasoning: options.reasoning,
+        outputSchema: schemaPath,
+      }),
+      {
+        cwd: options.projectPath,
+        timeoutMs: 0,
+        json: true,
+        session: options.session,
+        onProgress: options.onProgress,
+      },
+    );
+    if (result.threadId) lastThreadId = result.threadId;
+    if (result.code !== 0) {
+      lastError = result.output || result.stderr || `Codex exited with code ${result.code}.`;
+    } else {
+      try {
+        const patch = parseCodexPatchOutput(result.output);
+        const applied = patch.ops.length ? applyProjectPatch(options.project, patch) : { project: options.project, changedNodeIds: [], summary: patch.summary };
+        return { ok: true, patch, project: applied.project, changedNodeIds: applied.changedNodeIds, summary: applied.summary, threadId: lastThreadId };
+      } catch (error) {
+        lastError = String((error as Error).message || error);
+      }
+    }
+
+    if (attempt === 0) {
+      options.onProgress({ type: "error", text: `Patch rejected: ${lastError}` });
+      prompt = await buildFramerCodexPrompt("Return a corrected ProjectPatch for the original user request.", {
+        projectId: options.projectId,
+        projectPath: options.projectPath,
+        project: options.project,
+        conversation: [],
+        selection: [],
+        retryError: lastError,
+      });
+    }
+  }
+
+  return { ok: false, error: `AI patch rejected: ${lastError}`, threadId: lastThreadId };
+}
+
+async function writeProjectPatchSchema() {
+  const file = path.join(os.tmpdir(), "framer-project-patch-schema.json");
+  await fsp.writeFile(file, JSON.stringify(PROJECT_PATCH_SCHEMA, null, 2), "utf8");
+  return file;
+}
+
+function parseCodexPatchOutput(output: string): ProjectPatch {
+  const parsed = JSON.parse(output) as { summary?: unknown; opsJson?: unknown; ops?: unknown };
+  if (typeof parsed.opsJson === "string") {
+    return parseProjectPatch(JSON.stringify({ summary: String(parsed.summary || ""), ops: JSON.parse(parsed.opsJson) }));
+  }
+  return parseProjectPatch(output);
+}
+
+const PROJECT_PATCH_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["summary", "opsJson"],
+  properties: {
+    summary: { type: "string" },
+    opsJson: { type: "string" },
+  },
+};
 
 async function readProjectFile(projectPath: string): Promise<SerializedProject | null> {
   try {
@@ -279,10 +436,11 @@ function sanitizeCodexOption(value: unknown, fallback = "") {
   return text || fallback;
 }
 
-function buildCodexExecArgs(options: { cwd: string; prompt: string; threadId?: string; model?: string; reasoning: string }) {
+function buildCodexExecArgs(options: { cwd: string; prompt: string; threadId?: string; model?: string; reasoning: string; outputSchema?: string }) {
   const flags = [
     "--skip-git-repo-check",
-    "--dangerously-bypass-approvals-and-sandbox",
+    "--sandbox",
+    "read-only",
     "-c",
     'approval_policy="never"',
     "-c",
@@ -292,6 +450,7 @@ function buildCodexExecArgs(options: { cwd: string; prompt: string; threadId?: s
     "--json",
   ];
   if (options.model) flags.push("--model", options.model);
+  if (options.outputSchema) flags.push("--output-schema", options.outputSchema);
   if (options.threadId) return ["exec", "resume", ...flags, options.threadId, options.prompt];
   return ["exec", ...flags, "--cd", options.cwd, options.prompt];
 }

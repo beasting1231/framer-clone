@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, eventSourceUrl, type CodexMessage, type CodexProgress, type CodexSendResult } from "@/api/client";
+import { hashProject } from "@/model/projectHash";
 import { useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
 import { IconClose, IconSparkle } from "./icons";
@@ -24,6 +25,9 @@ function progressText(progress: CodexProgress | null) {
 export function CodexChat() {
   const project = useDocument((s) => s.project);
   const projectId = useDocument((s) => s.projectId);
+  const agentBusy = useDocument((s) => s.agentBusy);
+  const context = useEditor((s) => s.context);
+  const breakpoint = useEditor((s) => s.breakpoint);
   const selection = useEditor((s) => s.selection);
   const [open, setOpen] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
@@ -35,7 +39,7 @@ export function CodexChat() {
   const [progress, setProgress] = useState<CodexProgress | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
-  const canSend = Boolean(projectId && authenticated && input.trim() && !busy);
+  const canSend = Boolean(projectId && authenticated && input.trim() && !busy && !agentBusy);
   const visibleMessages = useMemo(() => messages.filter((message) => message.text.trim()), [messages]);
 
   useEffect(() => {
@@ -129,11 +133,22 @@ export function CodexChat() {
     const conversation = visibleMessages.slice(-8);
     setInput("");
     setBusy(true);
+    useDocument.getState().setAgentBusy(true);
     setProgress({ type: "status", text: "Thinking..." });
     setMessages((current) => [...current, { role: "user", text: prompt }]);
     try {
+      await useDocument.getState().flushSave();
+      const currentProject = useDocument.getState().project;
+      if (!currentProject) throw new Error("No project is open.");
       await api.codexStartSession(projectId);
-      const result = await api.codexSend(projectId, { prompt, conversation, selection });
+      const result = await api.codexSend(projectId, {
+        prompt,
+        conversation,
+        selection,
+        projectHash: hashProject(currentProject),
+        currentPageId: context?.kind === "page" ? context.pageId : undefined,
+        breakpoint,
+      });
       setMessages((current) => {
         const next = [...current];
         const last = next[next.length - 1];
@@ -142,14 +157,15 @@ export function CodexChat() {
         else next.push({ role: "assistant", text });
         return next;
       });
-      if (result.ok && result.changedFiles?.includes("framer.json")) {
-        const reloaded = await api.getProject(projectId);
-        useDocument.getState().open(projectId, reloaded);
+      if (result.ok && result.patchApplied && result.project) {
+        useDocument.getState().applyAgentProject(result.project);
+        if (result.changedNodeIds?.length) useEditor.getState().select(result.changedNodeIds.slice(0, 1));
       }
     } catch (err) {
       setMessages((current) => [...current, { role: "assistant", text: String((err as Error).message || err) }]);
     } finally {
       setBusy(false);
+      useDocument.getState().setAgentBusy(false);
       setProgress(null);
     }
   };
@@ -158,6 +174,7 @@ export function CodexChat() {
     if (!projectId) return;
     await api.codexStop(projectId).catch(() => {});
     setBusy(false);
+    useDocument.getState().setAgentBusy(false);
     setProgress(null);
   };
 

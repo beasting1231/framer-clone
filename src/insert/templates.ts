@@ -32,12 +32,12 @@ export type TemplateId =
   | "section-footer"
   | "section-gallery";
 
-interface Built {
+export interface BuiltTemplate {
   root: Node;
   nodes: Record<string, Node>;
 }
 
-function assemble(root: Node, children: Built[]): Built {
+function assemble(root: Node, children: BuiltTemplate[]): BuiltTemplate {
   const nodes: Record<string, Node> = { [root.id]: root };
   for (const child of children) {
     child.root.parent = root.id;
@@ -47,11 +47,11 @@ function assemble(root: Node, children: Built[]): Built {
   return { root, nodes };
 }
 
-const leaf = (node: Node): Built => ({ root: node, nodes: { [node.id]: node } });
+const leaf = (node: Node): BuiltTemplate => ({ root: node, nodes: { [node.id]: node } });
 
 // ── primitive builders ───────────────────────────────────────────────────────
 
-function buildButton(label = "Get Started", opts: { variant?: "primary" | "ghost" } = {}): Built {
+function buildButton(label = "Get Started", opts: { variant?: "primary" | "ghost" } = {}): BuiltTemplate {
   const primary = opts.variant !== "ghost";
   const btn = createStack("Button", {
     width: fit(),
@@ -79,7 +79,7 @@ function buildButton(label = "Get Started", opts: { variant?: "primary" | "ghost
   return assemble(btn, [leaf(text)]);
 }
 
-function buildNavbar(): Built {
+function buildNavbar(): BuiltTemplate {
   const nav = createStack("Navbar", {
     width: fill(),
     height: fit(),
@@ -115,7 +115,7 @@ function buildNavbar(): Built {
   return assemble(nav, [leaf(logo), linksBuilt, cta]);
 }
 
-function buildHero(): Built {
+function buildHero(): BuiltTemplate {
   const hero = createStack("Hero", {
     width: fill(),
     height: fit(),
@@ -170,7 +170,7 @@ function buildHero(): Built {
   return assemble(hero, [leaf(heading), leaf(sub), buttonsBuilt]);
 }
 
-function buildFeatureCard(title: string, body: string): Built {
+function buildFeatureCard(title: string, body: string): BuiltTemplate {
   const card = createStack(title, {
     width: fill(),
     height: fit(),
@@ -199,7 +199,7 @@ function buildFeatureCard(title: string, body: string): Built {
   return assemble(card, [leaf(icon), leaf(heading), leaf(text)]);
 }
 
-function buildFeatures(): Built {
+function buildFeatures(): BuiltTemplate {
   const section = createStack("Features", {
     width: fill(),
     height: fit(),
@@ -241,7 +241,7 @@ function buildFeatures(): Built {
   return assemble(section, [leaf(heading), gridBuilt]);
 }
 
-function buildCta(): Built {
+function buildCta(): BuiltTemplate {
   const section = createStack("CTA", {
     width: fill(),
     height: fit(),
@@ -272,7 +272,7 @@ function buildCta(): Built {
   return assemble(section, [leaf(heading), button]);
 }
 
-function buildPriceCard(plan: string, price: string, features: string[], highlight = false): Built {
+function buildPriceCard(plan: string, price: string, features: string[], highlight = false): BuiltTemplate {
   const card = createStack(plan, {
     width: fill(),
     height: fit(),
@@ -316,7 +316,7 @@ function buildPriceCard(plan: string, price: string, features: string[], highlig
   return assemble(card, [leaf(name), leaf(priceText), listBuilt, btn]);
 }
 
-function buildPricing(): Built {
+function buildPricing(): BuiltTemplate {
   const section = createStack("Pricing", {
     width: fill(),
     height: fit(),
@@ -341,7 +341,7 @@ function buildPricing(): Built {
   return assemble(section, [leaf(heading), gridBuilt]);
 }
 
-function buildTestimonialCard(quote: string, author: string, role: string): Built {
+function buildTestimonialCard(quote: string, author: string, role: string): BuiltTemplate {
   const card = createStack(author, {
     width: fill(),
     height: fit(),
@@ -386,7 +386,7 @@ function buildTestimonialCard(quote: string, author: string, role: string): Buil
   return assemble(card, [leaf(quoteText), metaBuilt]);
 }
 
-function buildTestimonials(): Built {
+function buildTestimonials(): BuiltTemplate {
   const section = createStack("Testimonials", {
     width: fill(),
     height: fit(),
@@ -411,7 +411,7 @@ function buildTestimonials(): Built {
   return assemble(section, [leaf(heading), gridBuilt]);
 }
 
-function buildFooter(): Built {
+function buildFooter(): BuiltTemplate {
   const footer = createStack("Footer", {
     width: fill(),
     height: fit(),
@@ -447,7 +447,7 @@ function buildFooter(): Built {
   return assemble(footer, [leaf(brand), leaf(copyright), linksBuilt]);
 }
 
-function buildGallery(): Built {
+function buildGallery(): BuiltTemplate {
   const section = createStack("Gallery", {
     width: fill(),
     height: fit(),
@@ -475,7 +475,7 @@ function buildGallery(): Built {
 
 // ── template registry ────────────────────────────────────────────────────────
 
-function buildTemplate(id: TemplateId): Built {
+export function buildTemplate(id: TemplateId): BuiltTemplate {
   switch (id) {
     case "frame":
       return leaf(createFrame("Frame", { fill: { type: "solid", color: "#F0F0F2" } }));
