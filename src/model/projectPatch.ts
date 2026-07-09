@@ -1,10 +1,24 @@
 import { buildTemplate, type TemplateId } from "@/insert/templates";
-import type { BreakpointId, Node, SerializedProject, StyleProps } from "./types";
+import { syncClipDuration } from "./animation";
+import { uid } from "./factory";
+import type { AnimEasing, AnimProperty, AnimationClip, BreakpointId, Node, SerializedProject, StyleProps } from "./types";
 
 export type ProjectPatchOp =
   | { op: "setText"; nodeId: string; text: string }
   | { op: "setNodeFields"; nodeId: string; fields: Pick<Partial<Node>, "name" | "tag" | "textTag" | "alt" | "placeholder" | "inputType" | "link"> }
   | { op: "setStyles"; nodeIds: string[]; breakpoint: BreakpointId; styles: Partial<StyleProps> }
+  | {
+      op: "addAppearAnimation";
+      nodeIds: string[];
+      name?: string;
+      pageId?: string;
+      preset?: "fade" | "fade-up" | "fade-down" | "fade-left" | "fade-right" | "fade-blur" | "fade-blur-up" | "scale-fade";
+      duration?: number;
+      delay?: number;
+      stagger?: number;
+      appearViewport?: number;
+      easing?: AnimEasing;
+    }
   | { op: "insertTemplate"; templateId: TemplateId; parentId: string; index?: number }
   | { op: "insertTemplateRelative"; templateId: TemplateId; anchorNodeId: string; position: "before" | "after" }
   | { op: "insertNodeTree"; parentId: string; index?: number; rootId: string; nodes: Record<string, Node> }
@@ -35,6 +49,8 @@ const SIZE_MODES = new Set(["fixed", "fill", "relative", "fit", "viewport"]);
 const TAGS = new Set(["div", "section", "nav", "header", "footer", "main", "article", "aside", "button", "form", "input", "textarea"]);
 const TEXT_TAGS = new Set(["p", "h1", "h2", "h3", "h4", "h5", "h6", "span", "blockquote", "code"]);
 const NODE_FIELD_KEYS = new Set(["name", "tag", "textTag", "alt", "placeholder", "inputType", "link"]);
+const ANIM_PROPERTIES = new Set<AnimProperty>(["x", "y", "scale", "rotate", "opacity", "blur"]);
+const ANIM_EASINGS = new Set<AnimEasing>(["linear", "ease", "ease-in", "ease-out", "ease-in-out"]);
 const STYLE_KEYS = new Set<keyof StyleProps>([
   "width",
   "height",
@@ -127,6 +143,7 @@ export function validateProject(project: SerializedProject): ValidationResult {
     if (!project.nodes[component.rootId]) errors.push(`Component ${component.name} has missing root ${component.rootId}.`);
     else if (project.nodes[component.rootId].parent !== null) errors.push(`Component root ${component.rootId} must not have a parent.`);
   }
+  validateAnimations(project, errors);
 
   const visited = new Set<string>();
   const visiting = new Set<string>();
@@ -186,6 +203,13 @@ export function applyProjectPatch(project: SerializedProject, patch: ProjectPatc
           node.styles = styles;
           changed.add(id);
         }
+        break;
+      }
+      case "addAppearAnimation": {
+        const clip = buildAppearAnimation(next, op);
+        next.animations ??= [];
+        next.animations.push(clip);
+        for (const id of op.nodeIds) changed.add(id);
         break;
       }
       case "insertTemplate": {
@@ -252,6 +276,9 @@ export function applyProjectPatch(project: SerializedProject, patch: ProjectPatc
         changed.add(parent.id);
         break;
       }
+      default: {
+        throw new Error(`Unsupported patch operation ${(op as { op?: string }).op ?? "unknown"}.`);
+      }
     }
   }
 
@@ -313,6 +340,170 @@ function validateStylePatch(styles: Partial<StyleProps>) {
   }
   if (styles.direction && !["row", "column"].includes(styles.direction)) throw new Error(`Invalid stack direction ${styles.direction}.`);
   if (styles.fill && !["solid", "linear", "radial", "image"].includes(styles.fill.type)) throw new Error(`Invalid fill type ${styles.fill.type}.`);
+}
+
+function validateAnimations(project: SerializedProject, errors: string[]) {
+  if (project.animations === undefined) return;
+  if (!Array.isArray(project.animations)) {
+    errors.push("Animations must be an array.");
+    return;
+  }
+  const pageIds = new Set(project.pages.map((page) => page.id));
+  const clipIds = new Set<string>();
+  for (const clip of project.animations) {
+    if (!clip || typeof clip !== "object") {
+      errors.push("Animation clip must be an object.");
+      continue;
+    }
+    if (!clip.id || typeof clip.id !== "string") errors.push("Animation clip has invalid id.");
+    else if (clipIds.has(clip.id)) errors.push(`Animation clip ${clip.id} is duplicated.`);
+    else clipIds.add(clip.id);
+    if (!clip.name || typeof clip.name !== "string") errors.push(`Animation clip ${clip.id} has invalid name.`);
+    if (!pageIds.has(clip.pageId)) errors.push(`Animation clip ${clip.id} references missing page ${clip.pageId}.`);
+    if (!["load", "appear"].includes(clip.trigger)) errors.push(`Animation clip ${clip.id} has invalid trigger ${clip.trigger}.`);
+    if (!Number.isFinite(clip.duration) || clip.duration < 0) errors.push(`Animation clip ${clip.id} has invalid duration.`);
+    if (clip.appearViewport !== undefined && (!Number.isFinite(clip.appearViewport) || clip.appearViewport < 0 || clip.appearViewport > 100)) {
+      errors.push(`Animation clip ${clip.id} has invalid appearViewport.`);
+    }
+    if (!Array.isArray(clip.tracks)) {
+      errors.push(`Animation clip ${clip.id} tracks must be an array.`);
+      continue;
+    }
+    const trackKeys = new Set<string>();
+    for (const track of clip.tracks) {
+      if (!track.id || typeof track.id !== "string") errors.push(`Animation clip ${clip.id} has a track with invalid id.`);
+      if (!project.nodes[track.nodeId]) errors.push(`Animation track ${track.id} references missing node ${track.nodeId}.`);
+      if (!ANIM_PROPERTIES.has(track.property)) errors.push(`Animation track ${track.id} has invalid property ${track.property}.`);
+      const trackKey = `${track.nodeId}:${track.property}`;
+      if (trackKeys.has(trackKey)) errors.push(`Animation clip ${clip.id} has duplicate ${track.property} track for ${track.nodeId}.`);
+      trackKeys.add(trackKey);
+      if (!Array.isArray(track.keyframes) || track.keyframes.length === 0) {
+        errors.push(`Animation track ${track.id} must have keyframes.`);
+        continue;
+      }
+      let previousTime = -1;
+      const keyframeIds = new Set<string>();
+      for (const keyframe of track.keyframes) {
+        if (!keyframe.id || typeof keyframe.id !== "string") errors.push(`Animation track ${track.id} has keyframe with invalid id.`);
+        else if (keyframeIds.has(keyframe.id)) errors.push(`Animation track ${track.id} has duplicated keyframe ${keyframe.id}.`);
+        else keyframeIds.add(keyframe.id);
+        if (!Number.isFinite(keyframe.time) || keyframe.time < 0) errors.push(`Animation track ${track.id} has invalid keyframe time.`);
+        if (keyframe.time < previousTime) errors.push(`Animation track ${track.id} keyframes must be sorted by time.`);
+        previousTime = keyframe.time;
+        if (!Number.isFinite(keyframe.value)) errors.push(`Animation track ${track.id} has invalid keyframe value.`);
+        if (!ANIM_EASINGS.has(keyframe.easing)) errors.push(`Animation track ${track.id} has invalid easing ${keyframe.easing}.`);
+      }
+    }
+  }
+}
+
+function buildAppearAnimation(project: SerializedProject, op: Extract<ProjectPatchOp, { op: "addAppearAnimation" }>): AnimationClip {
+  if (!Array.isArray(op.nodeIds) || op.nodeIds.length === 0) throw new Error("addAppearAnimation requires at least one nodeId.");
+  const uniqueNodeIds = [...new Set(op.nodeIds)];
+  const pageId = op.pageId ?? pageIdForNode(project, uniqueNodeIds[0]);
+  if (!pageId || !project.pages.some((page) => page.id === pageId)) throw new Error("addAppearAnimation could not determine a valid page.");
+  for (const nodeId of uniqueNodeIds) {
+    requireNode(project, nodeId);
+    const nodePageId = pageIdForNode(project, nodeId);
+    if (nodePageId && nodePageId !== pageId) throw new Error(`Node ${nodeId} belongs to a different page.`);
+  }
+
+  const duration = clampNumber(op.duration, 250, 4000, 700);
+  const delay = clampNumber(op.delay, 0, 10000, 0);
+  const stagger = clampNumber(op.stagger, 0, 2000, 100);
+  const easing = ANIM_EASINGS.has(op.easing ?? "ease-out") ? op.easing ?? "ease-out" : "ease-out";
+  const preset = op.preset ?? "fade-blur-up";
+  const tracks: AnimationClip["tracks"] = [];
+  const pushTrack = (nodeId: string, property: AnimProperty, start: number, end: number, from: number, to: number) => {
+    tracks.push({
+      id: uid(),
+      nodeId,
+      property,
+      keyframes: [
+        { id: uid(), time: start, value: from, easing },
+        { id: uid(), time: end, value: to, easing },
+      ],
+    });
+  };
+
+  uniqueNodeIds.forEach((nodeId, index) => {
+    const start = Math.round(delay + index * stagger);
+    const end = Math.round(start + duration);
+    switch (preset) {
+      case "fade":
+        pushTrack(nodeId, "opacity", start, end, 0, 1);
+        break;
+      case "fade-up":
+        pushTrack(nodeId, "y", start, end, 40, 0);
+        pushTrack(nodeId, "opacity", start, end, 0, 1);
+        break;
+      case "fade-down":
+        pushTrack(nodeId, "y", start, end, -40, 0);
+        pushTrack(nodeId, "opacity", start, end, 0, 1);
+        break;
+      case "fade-left":
+        pushTrack(nodeId, "x", start, end, 40, 0);
+        pushTrack(nodeId, "opacity", start, end, 0, 1);
+        break;
+      case "fade-right":
+        pushTrack(nodeId, "x", start, end, -40, 0);
+        pushTrack(nodeId, "opacity", start, end, 0, 1);
+        break;
+      case "fade-blur":
+        pushTrack(nodeId, "blur", start, end, 14, 0);
+        pushTrack(nodeId, "opacity", start, end, 0, 1);
+        break;
+      case "scale-fade":
+        pushTrack(nodeId, "scale", start, end, 0.92, 1);
+        pushTrack(nodeId, "opacity", start, end, 0, 1);
+        break;
+      case "fade-blur-up":
+      default:
+        pushTrack(nodeId, "y", start, end, 42, 0);
+        pushTrack(nodeId, "blur", start, end, 14, 0);
+        pushTrack(nodeId, "opacity", start, end, 0, 1);
+        break;
+    }
+  });
+
+  const clip: AnimationClip = {
+    id: uid(),
+    name: uniqueClipName(project, pageId, op.name || "AI appear animation"),
+    pageId,
+    duration: 0,
+    trigger: "appear",
+    appearViewport: clampNumber(op.appearViewport, 0, 100, 20),
+    loop: false,
+    tracks,
+  };
+  syncClipDuration(clip);
+  return clip;
+}
+
+function pageIdForNode(project: SerializedProject, nodeId: string): string | null {
+  const seen = new Set<string>();
+  let current: Node | undefined = project.nodes[nodeId];
+  while (current && !seen.has(current.id)) {
+    seen.add(current.id);
+    const page = project.pages.find((candidate) => candidate.rootId === current?.id);
+    if (page) return page.id;
+    current = current.parent ? project.nodes[current.parent] : undefined;
+  }
+  return null;
+}
+
+function uniqueClipName(project: SerializedProject, pageId: string, baseName: string) {
+  const names = new Set((project.animations ?? []).filter((clip) => clip.pageId === pageId).map((clip) => clip.name));
+  let name = baseName.trim() || "AI appear animation";
+  let next = 2;
+  while (names.has(name)) name = `${baseName} (${next++})`;
+  return name;
+}
+
+function clampNumber(value: number | undefined, min: number, max: number, fallback: number) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(min, Math.min(max, numeric));
 }
 
 function requireNode(project: SerializedProject, id: string): Node {

@@ -2302,6 +2302,98 @@
           ]
         }
       ]
+    },
+    {
+      "id": "aiPricingAppear1",
+      "name": "Pricing cards appear",
+      "pageId": "0dGhDaecW5",
+      "duration": 940,
+      "trigger": "appear",
+      "appearViewport": 20,
+      "loop": false,
+      "tracks": [
+        {
+          "id": "aiPriceStarterY",
+          "nodeId": "eC0yiwZHtZ",
+          "property": "y",
+          "keyframes": [
+            { "id": "aiPriceStarterY0", "time": 0, "value": 42, "easing": "ease-out" },
+            { "id": "aiPriceStarterY1", "time": 700, "value": 0, "easing": "ease-out" }
+          ]
+        },
+        {
+          "id": "aiPriceStarterBlur",
+          "nodeId": "eC0yiwZHtZ",
+          "property": "blur",
+          "keyframes": [
+            { "id": "aiPriceStarterBlur0", "time": 0, "value": 14, "easing": "ease-out" },
+            { "id": "aiPriceStarterBlur1", "time": 700, "value": 0, "easing": "ease-out" }
+          ]
+        },
+        {
+          "id": "aiPriceStarterOpacity",
+          "nodeId": "eC0yiwZHtZ",
+          "property": "opacity",
+          "keyframes": [
+            { "id": "aiPriceStarterOpacity0", "time": 0, "value": 0, "easing": "ease-out" },
+            { "id": "aiPriceStarterOpacity1", "time": 700, "value": 1, "easing": "ease-out" }
+          ]
+        },
+        {
+          "id": "aiPriceProY",
+          "nodeId": "ds9QsPI8Ms",
+          "property": "y",
+          "keyframes": [
+            { "id": "aiPriceProY0", "time": 120, "value": 42, "easing": "ease-out" },
+            { "id": "aiPriceProY1", "time": 820, "value": 0, "easing": "ease-out" }
+          ]
+        },
+        {
+          "id": "aiPriceProBlur",
+          "nodeId": "ds9QsPI8Ms",
+          "property": "blur",
+          "keyframes": [
+            { "id": "aiPriceProBlur0", "time": 120, "value": 14, "easing": "ease-out" },
+            { "id": "aiPriceProBlur1", "time": 820, "value": 0, "easing": "ease-out" }
+          ]
+        },
+        {
+          "id": "aiPriceProOpacity",
+          "nodeId": "ds9QsPI8Ms",
+          "property": "opacity",
+          "keyframes": [
+            { "id": "aiPriceProOpacity0", "time": 120, "value": 0, "easing": "ease-out" },
+            { "id": "aiPriceProOpacity1", "time": 820, "value": 1, "easing": "ease-out" }
+          ]
+        },
+        {
+          "id": "aiPriceTeamY",
+          "nodeId": "acTh9DC9Bz",
+          "property": "y",
+          "keyframes": [
+            { "id": "aiPriceTeamY0", "time": 240, "value": 42, "easing": "ease-out" },
+            { "id": "aiPriceTeamY1", "time": 940, "value": 0, "easing": "ease-out" }
+          ]
+        },
+        {
+          "id": "aiPriceTeamBlur",
+          "nodeId": "acTh9DC9Bz",
+          "property": "blur",
+          "keyframes": [
+            { "id": "aiPriceTeamBlur0", "time": 240, "value": 14, "easing": "ease-out" },
+            { "id": "aiPriceTeamBlur1", "time": 940, "value": 0, "easing": "ease-out" }
+          ]
+        },
+        {
+          "id": "aiPriceTeamOpacity",
+          "nodeId": "acTh9DC9Bz",
+          "property": "opacity",
+          "keyframes": [
+            { "id": "aiPriceTeamOpacity0", "time": 240, "value": 0, "easing": "ease-out" },
+            { "id": "aiPriceTeamOpacity1", "time": 940, "value": 1, "easing": "ease-out" }
+          ]
+        }
+      ]
     }
   ]
 }

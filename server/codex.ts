@@ -287,6 +287,7 @@ function projectPatchSchemaExample() {
     opsJson: JSON.stringify([
       { op: "setText", nodeId: "selectedTextNodeId", text: "New text" },
       { op: "setStyles", nodeIds: ["nodeId"], breakpoint: "desktop", styles: { fontSize: 48, color: "#111111" } },
+      { op: "addAppearAnimation", nodeIds: ["cardNodeId1", "cardNodeId2"], name: "Pricing cards appear", preset: "fade-blur-up", duration: 700, stagger: 120, appearViewport: 20 },
       { op: "insertTemplate", templateId: "section-hero", parentId: "pageRootId", index: 1 },
       { op: "insertTemplateRelative", templateId: "section-pricing", anchorNodeId: "heroNodeId", position: "after" },
     ]),
