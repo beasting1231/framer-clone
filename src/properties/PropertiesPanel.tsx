@@ -113,6 +113,28 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
   // CMS binding availability: node inside a collection list card or cms template page
   const bindableCollection = findBindableCollection(project, node);
 
+  if (!multi && node.customCode) {
+    return (
+      <div className="right-panel custom-code-locked-panel">
+        <Section title={node.name}>
+          <PropRow label="Name">
+            <input className="prop-input" value={node.name} disabled readOnly />
+          </PropRow>
+        </Section>
+        <Section title="Custom code">
+          <div className="custom-code-lock">
+            <strong>Properties disabled</strong>
+            <p>
+              This layer is controlled by approved custom code. Normal editor controls are locked so they do not overwrite
+              the custom implementation.
+            </p>
+            {node.customCode.note && <p className="muted">{node.customCode.note}</p>}
+          </div>
+        </Section>
+      </div>
+    );
+  }
+
   return (
     <div className="right-panel">
       {!multi && !isRoot && (

@@ -272,6 +272,13 @@ export interface CmsBinding {
   fieldId: string;
 }
 
+export interface CustomCodeBlock {
+  html: string;
+  css?: string;
+  note?: string;
+  appliedAt?: string;
+}
+
 export interface Node {
   id: string;
   type: NodeType;
@@ -282,6 +289,7 @@ export interface Node {
   styles: ResponsiveStyles;
   effects?: Effects;
   link?: LinkTarget;
+  customCode?: CustomCodeBlock;
 
   // frame
   tag?: SemanticTag;

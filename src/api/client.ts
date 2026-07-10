@@ -1,4 +1,5 @@
 import type { BreakpointId, ProjectMeta, SerializedProject } from "@/model/types";
+import type { CustomCodeProposal } from "@/model/customCode";
 
 export interface ProjectListItem extends ProjectMeta {
   pageCount: number;
@@ -30,6 +31,8 @@ export interface CodexSendResult {
   threadId?: string;
   error?: string;
   unauthenticated?: boolean;
+  requiresCustomCodeApproval?: boolean;
+  customCodeProposal?: CustomCodeProposal;
 }
 
 const API_FALLBACK_ORIGIN = "http://localhost:4570";
@@ -112,8 +115,11 @@ export const api = {
   codexStartSession: (projectId: string) =>
     request<{ ok: boolean; mode: string; startedAt: number; threadId?: string }>(`/api/codex/projects/${projectId}/start-session`, { method: "POST" }),
 
-  codexSend: (projectId: string, body: { prompt: string; conversation?: CodexMessage[]; selection?: string[]; model?: string; reasoning?: string; projectHash?: string; currentPageId?: string; breakpoint?: BreakpointId }) =>
+  codexSend: (projectId: string, body: { prompt: string; conversation?: CodexMessage[]; selection?: string[]; model?: string; reasoning?: string; speed?: string; projectHash?: string; currentPageId?: string; breakpoint?: BreakpointId }) =>
     request<CodexSendResult>(`/api/codex/projects/${projectId}/send`, { method: "POST", body: JSON.stringify(body) }),
+
+  codexApplyCustomCode: (projectId: string, body: { proposal: CustomCodeProposal; projectHash?: string }) =>
+    request<CodexSendResult>(`/api/codex/projects/${projectId}/apply-custom-code`, { method: "POST", body: JSON.stringify(body) }),
 
   codexStop: (projectId: string) => request<{ ok: true }>(`/api/codex/projects/${projectId}/stop`, { method: "POST" }),
 };

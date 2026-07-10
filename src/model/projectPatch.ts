@@ -1,5 +1,6 @@
 import { buildTemplate, type TemplateId } from "@/insert/templates";
 import { syncClipDuration } from "./animation";
+import { validateCustomCodeProposal } from "./customCode";
 import { uid } from "./factory";
 import type { AnimEasing, AnimProperty, AnimationClip, BreakpointId, Node, SerializedProject, StyleProps } from "./types";
 
@@ -327,6 +328,10 @@ function validateNode(node: Node, errors: string[]) {
   }
   if (node.tag && !TAGS.has(node.tag)) errors.push(`Node ${node.id} has invalid tag ${node.tag}.`);
   if (node.textTag && !TEXT_TAGS.has(node.textTag)) errors.push(`Node ${node.id} has invalid text tag ${node.textTag}.`);
+  if (node.customCode) {
+    const customErrors = validateCustomCodeProposal({ nodeId: node.id, ...node.customCode });
+    for (const error of customErrors) errors.push(`Node ${node.id} has invalid custom code: ${error}`);
+  }
 }
 
 function validateStylePatch(styles: Partial<StyleProps>) {

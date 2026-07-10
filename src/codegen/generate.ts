@@ -16,6 +16,7 @@ import { nodeStyles } from "../model/resolve";
 import { stylesToCss, type CssContext } from "../model/css";
 import { getHoverStyles, resolveHoverAppearance } from "../model/hover";
 import { clipMotionAttrs } from "../model/animation";
+import { sanitizeCustomCodeHtml, scopeCustomCodeCss } from "../model/customCode";
 import { cssDeclarations, cssDiff } from "./cssText";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -430,6 +431,27 @@ function emitNode(ctx: GenCtx, id: string, scope: Scope, imports: FileImports, i
           .replace(/^(\s*)<(\w+)/, (m, s, tag) => `${s}<${tag} key={entry.slug}`)
       : "";
     return `${indent}<div className=${className}>\n${indent}  {${varName}${limit}.map((entry) => (\n${inner}\n${indent}  ))}\n${indent}</div>`;
+  }
+
+  // ── custom code override
+  if (node.customCode) {
+    const baseTag: string = node.tag && !["input", "textarea"].includes(node.tag) ? node.tag : "div";
+    const el = motion ? `motion.${baseTag}` : baseTag;
+    const scopedCss = scopeCustomCodeCss(node.id, node.customCode.css);
+    const styleNode = scopedCss
+      ? `\n${indent}  <style dangerouslySetInnerHTML={{ __html: ${jsString(scopedCss)} }} />`
+      : "";
+    const html = sanitizeCustomCodeHtml(node.customCode.html);
+    const custom = `${indent}<${el} className=${className} data-custom-code-node=${jsString(node.id)}${fx}>${styleNode}\n${indent}  <div dangerouslySetInnerHTML={{ __html: ${jsString(html)} }} />\n${indent}</${el}>`;
+    const linkInfo = linkAttrs(ctx, node, scope, imports);
+    if (linkInfo) {
+      const indented = custom
+        .split("\n")
+        .map((line) => "  " + line)
+        .join("\n");
+      return `${indent}<${linkInfo.tag}${linkInfo.attrs}>\n${indented}\n${indent}</${linkInfo.tag}>`;
+    }
+    return custom;
   }
 
   // ── text

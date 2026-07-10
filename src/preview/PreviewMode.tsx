@@ -4,6 +4,7 @@ import { buildClipMotionMap } from "@/model/animation";
 import { getHoverStyles } from "@/model/hover";
 import { nodeStyles } from "@/model/resolve";
 import { stylesToCss, fillToCss, shadowToCss, type CssContext } from "@/model/css";
+import { sanitizeCustomCodeHtml, scopeCustomCodeCss } from "@/model/customCode";
 import { useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
 import { IconClose, IconDesktop, IconFullWidth, IconPhone, IconRefresh, IconTablet } from "@/ui/icons";
@@ -131,6 +132,36 @@ function PreviewNode({ id, env, parentCtx }: { id: string; env: PreviewEnv; pare
   const clipAnim = env.clipMotion?.[id];
   const anim = clipAnim ? { ...motionFor(node, true), ...clipAnim } : motionFor(node);
   const hasAnim = Object.keys(anim).length > 0;
+
+  if (node.customCode) {
+    const scopedCss = scopeCustomCodeCss(node.id, node.customCode.css);
+    const content = (
+      <>
+        {scopedCss ? <style>{scopedCss}</style> : null}
+        <div dangerouslySetInnerHTML={{ __html: sanitizeCustomCodeHtml(node.customCode.html) }} />
+      </>
+    );
+    const customStyle = { ...style, ...link.style };
+    if (hasAnim) {
+      return (
+        <PreviewMotion
+          tag="div"
+          anim={anim}
+          scrollRoot={env.scrollRoot}
+          style={customStyle}
+          onClick={link.onClick}
+          data-custom-code-node={node.id}
+        >
+          {content}
+        </PreviewMotion>
+      );
+    }
+    return (
+      <div data-custom-code-node={node.id} style={customStyle} onClick={link.onClick}>
+        {content}
+      </div>
+    );
+  }
 
   switch (node.type) {
     case "text": {

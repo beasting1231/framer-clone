@@ -3,7 +3,16 @@ import { motion } from "framer-motion";
 export default function Home() {
   return (
     <main className="home-vYq4">
-      <nav className="navbar-rsY5">
+      <motion.nav
+        className="navbar-rsY5"
+        initial={{ top: -40, opacity: 0 }}
+        whileInView={{ top: [-40, 0], opacity: [0, 1] }}
+        viewport={{ once: true, amount: "some", pctFromBottom: 0, margin: "0px 0px -0% 0px" }}
+        transition={{
+          top: { type: "tween", duration: 0.65, times: [0, 1], ease: [[0, 0, 0.58, 1]] },
+          opacity: { type: "tween", duration: 0.65, times: [0, 1], ease: [[0, 0, 0.58, 1]] },
+        }}
+      >
         <p className="logo-swaB">Brand</p>
         <div className="nav-links-6xzu">
           <p className="product-s1Ps">Product</p>
@@ -18,17 +27,32 @@ export default function Home() {
         >
           <p className="label-tiVC">Sign Up</p>
         </motion.button>
-      </nav>
+      </motion.nav>
       <section className="hero-2wQK">
         <motion.h1
           className="heading-6MbH"
-          initial={{ top: 40, opacity: 0 }}
+          initial={{ top: 42, filter: "blur(14px)", opacity: 0 }}
           animate={{ top: [40, 0, 0], opacity: [0, 1, 1] }}
+          whileInView={{
+            top: [42, 0, 0],
+            filter: ["blur(14px)", "blur(0px)", "blur(0px)"],
+            opacity: [0, 1, 1],
+          }}
+          viewport={{ once: true, amount: "some", pctFromBottom: 10, margin: "0px 0px -10% 0px" }}
           transition={{
             top: {
               type: "tween",
-              duration: 1,
-              times: [0, 0.7, 1],
+              duration: 1.04,
+              times: [0, 0.7692307692307693, 1],
+              ease: [
+                [0, 0, 0.58, 1],
+                [0, 0, 1, 1],
+              ],
+            },
+            filter: {
+              type: "tween",
+              duration: 1.04,
+              times: [0, 0.7692307692307693, 1],
               ease: [
                 [0, 0, 0.58, 1],
                 [0, 0, 1, 1],
@@ -36,8 +60,8 @@ export default function Home() {
             },
             opacity: {
               type: "tween",
-              duration: 1,
-              times: [0, 0.7, 1],
+              duration: 1.04,
+              times: [0, 0.7692307692307693, 1],
               ease: [
                 [0, 0, 0.58, 1],
                 [0, 0, 1, 1],
@@ -49,13 +73,29 @@ export default function Home() {
         </motion.h1>
         <motion.p
           className="subheading-guKe"
-          initial={{ top: 40, opacity: 0 }}
+          initial={{ top: 42, filter: "blur(14px)", opacity: 0 }}
           animate={{ top: [40, 40, 0, 0], opacity: [0, 0, 1, 1] }}
+          whileInView={{
+            top: [42, 42, 0, 0],
+            filter: ["blur(14px)", "blur(14px)", "blur(0px)", "blur(0px)"],
+            opacity: [0, 0, 1, 1],
+          }}
+          viewport={{ once: true, amount: "some", pctFromBottom: 10, margin: "0px 0px -10% 0px" }}
           transition={{
             top: {
               type: "tween",
-              duration: 1,
-              times: [0, 0.15, 0.85, 1],
+              duration: 1.04,
+              times: [0, 0.11538461538461539, 0.8846153846153846, 1],
+              ease: [
+                [0, 0, 1, 1],
+                [0, 0, 0.58, 1],
+                [0, 0, 1, 1],
+              ],
+            },
+            filter: {
+              type: "tween",
+              duration: 1.04,
+              times: [0, 0.11538461538461539, 0.8846153846153846, 1],
               ease: [
                 [0, 0, 1, 1],
                 [0, 0, 0.58, 1],
@@ -64,8 +104,8 @@ export default function Home() {
             },
             opacity: {
               type: "tween",
-              duration: 1,
-              times: [0, 0.15, 0.85, 1],
+              duration: 1.04,
+              times: [0, 0.11538461538461539, 0.8846153846153846, 1],
               ease: [
                 [0, 0, 1, 1],
                 [0, 0, 0.58, 1],
@@ -78,13 +118,28 @@ export default function Home() {
         </motion.p>
         <motion.div
           className="buttons-NkCL"
-          initial={{ top: 40, opacity: 0 }}
-          animate={{ top: [40, 40, 0], opacity: [0, 0, 1] }}
+          initial={{ top: 42, filter: "blur(14px)", opacity: 0 }}
+          animate={{ top: [40, 40, 0, 0], opacity: [0, 0, 1, 1] }}
+          whileInView={{
+            top: [42, 42, 0],
+            filter: ["blur(14px)", "blur(14px)", "blur(0px)"],
+            opacity: [0, 0, 1],
+          }}
+          viewport={{ once: true, amount: "some", pctFromBottom: 10, margin: "0px 0px -10% 0px" }}
           transition={{
             top: {
               type: "tween",
-              duration: 1,
-              times: [0, 0.3, 1],
+              duration: 1.04,
+              times: [0, 0.23076923076923078, 1],
+              ease: [
+                [0, 0, 1, 1],
+                [0, 0, 0.58, 1],
+              ],
+            },
+            filter: {
+              type: "tween",
+              duration: 1.04,
+              times: [0, 0.23076923076923078, 1],
               ease: [
                 [0, 0, 1, 1],
                 [0, 0, 0.58, 1],
@@ -92,8 +147,8 @@ export default function Home() {
             },
             opacity: {
               type: "tween",
-              duration: 1,
-              times: [0, 0.3, 1],
+              duration: 1.04,
+              times: [0, 0.23076923076923078, 1],
               ease: [
                 [0, 0, 1, 1],
                 [0, 0, 0.58, 1],
@@ -102,13 +157,6 @@ export default function Home() {
           }}
         >
           <motion.button
-            className="button-Gpb2"
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-          >
-            <p className="label-doLR">View Portfolio</p>
-          </motion.button>
-          <motion.button
             className="button-mKC9"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
@@ -116,11 +164,99 @@ export default function Home() {
             <p className="label-ifOh">Book a Session</p>
           </motion.button>
         </motion.div>
+        <motion.button
+          className="button-Gpb2"
+          data-custom-code-node="Gpb2c6EJ7n"
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+          initial={{ top: 40, opacity: 0 }}
+          animate={{ top: [40, 40, 0], opacity: [0, 0, 1] }}
+          transition={{
+            top: {
+              type: "tween",
+              duration: 1.15,
+              times: [0, 0.391304347826087, 1],
+              ease: [
+                [0, 0, 1, 1],
+                [0, 0, 0.58, 1],
+              ],
+            },
+            opacity: {
+              type: "tween",
+              duration: 1.15,
+              times: [0, 0.391304347826087, 1],
+              ease: [
+                [0, 0, 1, 1],
+                [0, 0, 0.58, 1],
+              ],
+            },
+          }}
+        >
+          <style
+            dangerouslySetInnerHTML={{
+              __html:
+                '[data-custom-code-node="Gpb2c6EJ7n"] { position: relative; overflow: hidden; } [data-custom-code-node="Gpb2c6EJ7n"] .shimmer-label { position: relative; z-index: 1; } [data-custom-code-node="Gpb2c6EJ7n"]::before { content: ""; position: absolute; top: 0; bottom: 0; left: -75%; width: 50%; background: linear-gradient(120deg, transparent, rgba(255,255,255,0.45), transparent); transform: skewX(-20deg); pointer-events: none; transition: none; } [data-custom-code-node="Gpb2c6EJ7n"]:hover::before { left: 125%; transition: left 700ms ease-out; }',
+            }}
+          />
+          <div
+            dangerouslySetInnerHTML={{
+              __html: '<span class="shimmer-label">View Portfolio</span>',
+            }}
+          />
+        </motion.button>
       </section>
-      <section className="pricing-fr2a">
+      <motion.section
+        className="pricing-fr2a"
+        initial={{ top: 42, filter: "blur(14px)", opacity: 0 }}
+        whileInView={{ top: [42, 0], filter: ["blur(14px)", "blur(0px)"], opacity: [0, 1] }}
+        viewport={{ once: true, amount: "some", pctFromBottom: 20, margin: "0px 0px -20% 0px" }}
+        transition={{
+          top: { type: "tween", duration: 0.8, times: [0, 1], ease: [[0, 0, 0.58, 1]] },
+          filter: { type: "tween", duration: 0.8, times: [0, 1], ease: [[0, 0, 0.58, 1]] },
+          opacity: { type: "tween", duration: 0.8, times: [0, 1], ease: [[0, 0, 0.58, 1]] },
+        }}
+      >
         <h2 className="heading-ObJN">Simple pricing</h2>
         <div className="plans-wsIi">
-          <div className="starter-eC0y">
+          <motion.div
+            className="starter-eC0y"
+            initial={{ top: 42, filter: "blur(14px)", opacity: 0 }}
+            whileInView={{
+              top: [42, 0, 0],
+              filter: ["blur(14px)", "blur(0px)", "blur(0px)"],
+              opacity: [0, 1, 1],
+            }}
+            viewport={{ once: true, amount: "some", pctFromBottom: 20, margin: "0px 0px -20% 0px" }}
+            transition={{
+              top: {
+                type: "tween",
+                duration: 0.94,
+                times: [0, 0.7446808510638298, 1],
+                ease: [
+                  [0, 0, 0.58, 1],
+                  [0, 0, 1, 1],
+                ],
+              },
+              filter: {
+                type: "tween",
+                duration: 0.94,
+                times: [0, 0.7446808510638298, 1],
+                ease: [
+                  [0, 0, 0.58, 1],
+                  [0, 0, 1, 1],
+                ],
+              },
+              opacity: {
+                type: "tween",
+                duration: 0.94,
+                times: [0, 0.7446808510638298, 1],
+                ease: [
+                  [0, 0, 0.58, 1],
+                  [0, 0, 1, 1],
+                ],
+              },
+            }}
+          >
             <p className="plan-dnez">Starter</p>
             <p className="price-T_1-">$0</p>
             <div className="features-fqTM">
@@ -135,8 +271,49 @@ export default function Home() {
             >
               <p className="label-pg18">Choose plan</p>
             </motion.button>
-          </div>
-          <div className="pro-ds9Q">
+          </motion.div>
+          <motion.div
+            className="pro-ds9Q"
+            initial={{ top: 42, filter: "blur(14px)", opacity: 0 }}
+            whileInView={{
+              top: [42, 42, 0, 0],
+              filter: ["blur(14px)", "blur(14px)", "blur(0px)", "blur(0px)"],
+              opacity: [0, 0, 1, 1],
+            }}
+            viewport={{ once: true, amount: "some", pctFromBottom: 20, margin: "0px 0px -20% 0px" }}
+            transition={{
+              top: {
+                type: "tween",
+                duration: 0.94,
+                times: [0, 0.1276595744680851, 0.8723404255319149, 1],
+                ease: [
+                  [0, 0, 1, 1],
+                  [0, 0, 0.58, 1],
+                  [0, 0, 1, 1],
+                ],
+              },
+              filter: {
+                type: "tween",
+                duration: 0.94,
+                times: [0, 0.1276595744680851, 0.8723404255319149, 1],
+                ease: [
+                  [0, 0, 1, 1],
+                  [0, 0, 0.58, 1],
+                  [0, 0, 1, 1],
+                ],
+              },
+              opacity: {
+                type: "tween",
+                duration: 0.94,
+                times: [0, 0.1276595744680851, 0.8723404255319149, 1],
+                ease: [
+                  [0, 0, 1, 1],
+                  [0, 0, 0.58, 1],
+                  [0, 0, 1, 1],
+                ],
+              },
+            }}
+          >
             <p className="plan-n-TW">Pro</p>
             <p className="price-_s3v">$19</p>
             <div className="features-U6WM">
@@ -152,8 +329,46 @@ export default function Home() {
             >
               <p className="label-4B6e">Choose plan</p>
             </motion.button>
-          </div>
-          <div className="team-acTh">
+          </motion.div>
+          <motion.div
+            className="team-acTh"
+            initial={{ top: 42, filter: "blur(14px)", opacity: 0 }}
+            whileInView={{
+              top: [42, 42, 0],
+              filter: ["blur(14px)", "blur(14px)", "blur(0px)"],
+              opacity: [0, 0, 1],
+            }}
+            viewport={{ once: true, amount: "some", pctFromBottom: 20, margin: "0px 0px -20% 0px" }}
+            transition={{
+              top: {
+                type: "tween",
+                duration: 0.94,
+                times: [0, 0.2553191489361702, 1],
+                ease: [
+                  [0, 0, 1, 1],
+                  [0, 0, 0.58, 1],
+                ],
+              },
+              filter: {
+                type: "tween",
+                duration: 0.94,
+                times: [0, 0.2553191489361702, 1],
+                ease: [
+                  [0, 0, 1, 1],
+                  [0, 0, 0.58, 1],
+                ],
+              },
+              opacity: {
+                type: "tween",
+                duration: 0.94,
+                times: [0, 0.2553191489361702, 1],
+                ease: [
+                  [0, 0, 1, 1],
+                  [0, 0, 0.58, 1],
+                ],
+              },
+            }}
+          >
             <p className="plan-VYsp">Team</p>
             <p className="price-_FRx">$49</p>
             <div className="features-fO0M">
@@ -168,9 +383,9 @@ export default function Home() {
             >
               <p className="label-dkaP">Choose plan</p>
             </motion.button>
-          </div>
+          </motion.div>
         </div>
-      </section>
+      </motion.section>
       <section className="contact-omEK">
         <div className="contact-copy-agjz">
           <h2 className="heading-OrAJ">Get in touch</h2>

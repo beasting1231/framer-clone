@@ -23,6 +23,13 @@ export function usePreviewShortcuts(opts: {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Escape") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        useEditor.getState().setScreen("editor");
+        return;
+      }
+
       if (isTypingTarget(e.target)) return;
       if (!e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
 

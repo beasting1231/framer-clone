@@ -3,6 +3,7 @@ import type { BreakpointId, CmsCollection, CmsEntry, InstanceOverride, Node, Ser
 import { resolveHoverAppearance } from "@/model/hover";
 import { ancestorChain, nodeStyles } from "@/model/resolve";
 import { stylesToCss, type CssContext } from "@/model/css";
+import { sanitizeCustomCodeHtml, scopeCustomCodeCss } from "@/model/customCode";
 import { docActions, useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
 import { useTimeline } from "@/store/timeline";
@@ -127,6 +128,16 @@ export const RenderNode = memo(function RenderNode({ id, env, parentCtx }: { id:
     parentDirection: props.direction ?? "column",
     editor: true,
   };
+
+  if (node.customCode) {
+    const scopedCss = scopeCustomCodeCss(node.id, node.customCode.css);
+    return (
+      <div data-node-id={hit} data-custom-code-node={node.id} data-custom-code="true" style={style}>
+        {scopedCss ? <style>{scopedCss}</style> : null}
+        <div dangerouslySetInnerHTML={{ __html: sanitizeCustomCodeHtml(node.customCode.html) }} />
+      </div>
+    );
+  }
 
   switch (node.type) {
     case "text": {

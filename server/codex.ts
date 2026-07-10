@@ -7,6 +7,12 @@ import { buildAgentEditorGuide } from "../src/model/agentGuide";
 import type { SerializedProject } from "../src/model/types";
 import { hashProject } from "../src/model/projectHash";
 import { validateProject } from "../src/model/projectPatch";
+import {
+  sanitizeCustomCodeCss,
+  sanitizeCustomCodeHtml,
+  type CustomCodeProposal,
+  validateCustomCodeProposal,
+} from "../src/model/customCode";
 
 type CodexRunResult = {
   code: number;
@@ -22,9 +28,15 @@ type CodexSendBody = {
   selection?: unknown;
   model?: string;
   reasoning?: string;
+  speed?: string;
   projectHash?: string;
   currentPageId?: string;
   breakpoint?: string;
+};
+
+type ApplyCustomCodeBody = {
+  proposal?: unknown;
+  projectHash?: string;
 };
 
 type CodexProgress = {
@@ -54,8 +66,15 @@ type CodexRouterOptions = {
 
 const sessions = new Map<string, CodexSession>();
 const CODEX_AGENT_VERSION = "direct-edit-v1";
-const DEFAULT_CODEX_MODEL = "gpt-5.5";
-const CODEX_MODELS = new Set(["gpt-5.5", "gpt-5.4-mini", "gpt-5.3-codex-spark"]);
+const DEFAULT_CODEX_MODEL = "gpt-5.6-sol";
+const CODEX_MODEL_CAPABILITIES: Record<string, { defaultReasoning: string; reasoning: Set<string>; fast: boolean }> = {
+  "gpt-5.6-sol": { defaultReasoning: "low", reasoning: new Set(["low", "medium", "high", "xhigh", "max", "ultra"]), fast: true },
+  "gpt-5.6-terra": { defaultReasoning: "medium", reasoning: new Set(["low", "medium", "high", "xhigh", "max", "ultra"]), fast: true },
+  "gpt-5.6-luna": { defaultReasoning: "medium", reasoning: new Set(["low", "medium", "high", "xhigh", "max"]), fast: true },
+  "gpt-5.5": { defaultReasoning: "medium", reasoning: new Set(["low", "medium", "high", "xhigh"]), fast: true },
+  "gpt-5.4-mini": { defaultReasoning: "medium", reasoning: new Set(["low", "medium", "high", "xhigh"]), fast: false },
+  "gpt-5.3-codex-spark": { defaultReasoning: "high", reasoning: new Set(["low", "medium", "high", "xhigh"]), fast: false },
+};
 
 export function createCodexRouter(options: CodexRouterOptions): Router {
   const router = express.Router();
@@ -117,6 +136,7 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
 
     session.busy = true;
     emitProgress(res, { type: "status", text: "Thinking...", projectId });
+    const model = sanitizeCodexModel(body.model);
     const result = await runCodexForDirectEdit({
       prompt: contextualPrompt,
       projectPath,
@@ -124,8 +144,9 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
       projectId,
       readProject: options.readProject,
       writeProject: options.writeProject,
-      model: sanitizeCodexModel(body.model),
-      reasoning: sanitizeCodexOption(body.reasoning, "medium"),
+      model,
+      reasoning: sanitizeCodexReasoning(body.reasoning, model),
+      speed: sanitizeCodexSpeed(body.speed, model),
       onProgress: (payload) => emitProgress(res, { ...payload, projectId }),
     });
     session.busy = false;
@@ -155,6 +176,52 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
       project: result.project,
       revision: result.project ? hashProject(result.project) : currentHash,
       threadId: session.threadId,
+      error: "",
+      requiresCustomCodeApproval: Boolean(result.customCodeProposal),
+      customCodeProposal: result.customCodeProposal,
+    });
+  });
+
+  router.post("/projects/:id/apply-custom-code", async (req, res) => {
+    const projectId = req.params.id;
+    assertProjectPath(projectId, options.projectsDir);
+    const body = req.body as ApplyCustomCodeBody;
+    const proposal = normalizeCustomCodeProposal(body.proposal);
+    if (!proposal) return res.status(400).json({ ok: false, error: "Missing custom code proposal." });
+
+    const project = await options.readProject(projectId);
+    if (!project) return res.status(404).json({ ok: false, error: "Project not found." });
+    const currentHash = hashProject(project);
+    if (body.projectHash && body.projectHash !== currentHash) {
+      return res.status(409).json({ ok: false, error: "Project changed before custom code was applied. Save and retry." });
+    }
+
+    const errors = validateCustomCodeProposal(proposal);
+    if (!project.nodes[proposal.nodeId]) errors.push(`Node ${proposal.nodeId} does not exist.`);
+    if (errors.length) return res.status(400).json({ ok: false, error: errors.join(" ") });
+
+    const next = structuredClone(project);
+    const node = next.nodes[proposal.nodeId];
+    node.customCode = {
+      html: sanitizeCustomCodeHtml(proposal.html),
+      css: sanitizeCustomCodeCss(proposal.css),
+      note: proposal.note?.slice(0, 500),
+      appliedAt: new Date().toISOString(),
+    };
+    node.locked = true;
+
+    const validation = validateProject(next);
+    if (!validation.ok) return res.status(400).json({ ok: false, error: validation.errors.join(" ") });
+    await options.writeProject(projectId, next);
+    const savedProject = (await options.readProject(projectId)) ?? next;
+    res.json({
+      ok: true,
+      output: `Applied custom code to ${node.name}. Properties are now locked for that layer.`,
+      changedFiles: ["framer.json"],
+      changedNodeIds: [node.id],
+      patchApplied: true,
+      project: savedProject,
+      revision: hashProject(savedProject),
       error: "",
     });
   });
@@ -237,6 +304,11 @@ async function buildFramerCodexPrompt(
     "- Do not edit only generated site files for an editor-visible change.",
     "- If the user asks an informational question, answer directly and do not edit files.",
     "- If the user asks for a change, inspect framer.json and make the edit directly.",
+    "- For normal editor-supported changes, edit framer.json directly.",
+    "- If the request needs custom HTML/CSS that the editor model cannot represent, do not edit framer.json.",
+    "- For custom-code-only work, ask for approval by ending your final answer with exactly this machine-readable line:",
+    'CUSTOM_CODE_REQUEST: {"nodeId":"target node id","html":"safe HTML fragment","css":"optional CSS using :host for the target wrapper","note":"why custom code is needed"}',
+    "- Custom code must be a static HTML/CSS fragment only. Do not include scripts, inline event handlers, external imports, or javascript: URLs.",
     "- After changing files, briefly state what changed.",
     "",
     buildAgentEditorGuide(),
@@ -328,9 +400,17 @@ async function runCodexForDirectEdit(options: {
   writeProject: (id: string, project: SerializedProject) => Promise<void>;
   model?: string;
   reasoning: string;
+  speed: string;
   onProgress: (payload: CodexProgress) => void;
 }): Promise<
-  | { ok: true; project: SerializedProject | null; changedFiles: string[]; output: string; threadId: string }
+  | {
+      ok: true;
+      project: SerializedProject | null;
+      changedFiles: string[];
+      output: string;
+      threadId: string;
+      customCodeProposal?: CustomCodeProposal;
+    }
   | { ok: false; error: string; threadId: string }
 > {
   const beforeSnapshot = await snapshotProjectFiles(options.projectPath);
@@ -346,6 +426,7 @@ async function runCodexForDirectEdit(options: {
         threadId: options.session.threadId,
         model: options.model,
         reasoning: options.reasoning,
+        speed: options.speed,
       }),
       {
         cwd: options.projectPath,
@@ -360,10 +441,36 @@ async function runCodexForDirectEdit(options: {
       lastError = result.output || result.stderr || `Codex exited with code ${result.code}.`;
     } else {
       const changedFiles = await getChangedProjectFiles(options.projectPath, beforeSnapshot);
+      const customCodeProposal = parseCustomCodeProposal(result.output);
       const project = await readProjectFile(options.projectPath);
+      let invalidCustomProposal = false;
+      if (customCodeProposal && changedFiles.length > 0) {
+        lastError = "Custom code proposals must not also edit project files before approval.";
+        invalidCustomProposal = true;
+      }
+      if (customCodeProposal && changedFiles.length === 0) {
+        const currentProject = await options.readProject(options.projectId);
+        const errors = validateCustomCodeProposal(customCodeProposal);
+        if (currentProject && !currentProject.nodes[customCodeProposal.nodeId]) {
+          errors.push(`Node ${customCodeProposal.nodeId} does not exist.`);
+        }
+        if (errors.length) {
+          lastError = `Custom code proposal rejected: ${errors.join(" ")}`;
+          invalidCustomProposal = true;
+        } else {
+          return {
+            ok: true,
+            project: null,
+            changedFiles: [],
+            output: customCodeProposal.note || "This request needs custom code. Approve it to apply the override.",
+            threadId: lastThreadId,
+            customCodeProposal,
+          };
+        }
+      }
       if (project) {
         const validation = validateProject(project);
-        if (validation.ok) {
+        if (validation.ok && !invalidCustomProposal) {
           if (changedFiles.length === 0) {
             return { ok: true, project: null, changedFiles: [], output: result.output || "Done.", threadId: lastThreadId };
           }
@@ -404,6 +511,60 @@ function formatCodexEditOutput(output: string, changedFiles: string[]) {
   const text = String(output || "Done.").trim() || "Done.";
   if (!changedFiles.length) return text;
   return `${text}\n\nChanged: ${changedFiles.slice(0, 5).join(", ")}${changedFiles.length > 5 ? "..." : ""}`;
+}
+
+function normalizeCustomCodeProposal(value: unknown): CustomCodeProposal | null {
+  if (!value || typeof value !== "object") return null;
+  const source = value as Record<string, unknown>;
+  return {
+    nodeId: String(source.nodeId || "").trim(),
+    html: String(source.html || ""),
+    css: source.css === undefined ? undefined : String(source.css),
+    note: source.note === undefined ? undefined : String(source.note),
+  };
+}
+
+function parseCustomCodeProposal(output: string): CustomCodeProposal | null {
+  const marker = "CUSTOM_CODE_REQUEST:";
+  const index = String(output || "").lastIndexOf(marker);
+  if (index < 0) return null;
+  const json = extractFirstJsonObject(output.slice(index + marker.length));
+  if (!json) return null;
+  try {
+    return normalizeCustomCodeProposal(JSON.parse(json));
+  } catch {
+    return null;
+  }
+}
+
+function extractFirstJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let index = start; index < text.length; index += 1) {
+    const char = text[index];
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (char === "\\") {
+      escape = true;
+      continue;
+    }
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (char === "{") depth += 1;
+    if (char === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, index + 1);
+    }
+  }
+  return null;
 }
 
 async function readProjectFile(projectPath: string): Promise<SerializedProject | null> {
@@ -469,10 +630,21 @@ function sanitizeCodexOption(value: unknown, fallback = "") {
 
 function sanitizeCodexModel(value: unknown) {
   const text = sanitizeCodexOption(value, DEFAULT_CODEX_MODEL);
-  return CODEX_MODELS.has(text) ? text : DEFAULT_CODEX_MODEL;
+  return CODEX_MODEL_CAPABILITIES[text] ? text : DEFAULT_CODEX_MODEL;
 }
 
-function buildCodexExecArgs(options: { cwd: string; prompt: string; threadId?: string; model?: string; reasoning: string }) {
+function sanitizeCodexReasoning(value: unknown, model: string) {
+  const capabilities = CODEX_MODEL_CAPABILITIES[model] ?? CODEX_MODEL_CAPABILITIES[DEFAULT_CODEX_MODEL];
+  const text = sanitizeCodexOption(value, capabilities.defaultReasoning);
+  return capabilities.reasoning.has(text) ? text : capabilities.defaultReasoning;
+}
+
+function sanitizeCodexSpeed(value: unknown, model: string) {
+  const text = sanitizeCodexOption(value, "default");
+  return text === "fast" && CODEX_MODEL_CAPABILITIES[model]?.fast ? "fast" : "default";
+}
+
+function buildCodexExecArgs(options: { cwd: string; prompt: string; threadId?: string; model?: string; reasoning: string; speed: string }) {
   const flags = [
     "--skip-git-repo-check",
     "--dangerously-bypass-approvals-and-sandbox",
@@ -484,8 +656,9 @@ function buildCodexExecArgs(options: { cwd: string; prompt: string; threadId?: s
     `model_reasoning_effort="${options.reasoning}"`,
     "-c",
     'model_reasoning_summary="auto"',
-    "--json",
   ];
+  if (options.speed === "fast") flags.push("-c", 'service_tier="priority"');
+  flags.push("--json");
   if (options.threadId) return ["exec", "resume", ...flags, options.threadId, options.prompt];
   return ["exec", ...flags, "--cd", options.cwd, options.prompt];
 }
