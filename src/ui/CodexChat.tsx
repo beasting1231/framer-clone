@@ -1,10 +1,94 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { api, eventSourceUrl, type CodexMessage, type CodexProgress, type CodexSendResult } from "@/api/client";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
+import { AnimatePresence, motion, useDragControls } from "framer-motion";
+import { nanoid } from "nanoid";
+import { api, eventSourceUrl, type CodexImageAttachment, type CodexMessage, type CodexProgress, type CodexSendResult } from "@/api/client";
 import { hashProject } from "@/model/projectHash";
 import { useCodexChat } from "@/store/codexChat";
 import { useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
-import { IconClose, IconRefresh, IconSparkle } from "./icons";
+import { IconArrowUp, IconCheck, IconClose, IconPencil, IconRefresh, IconSparkle, IconStop } from "./icons";
+
+type SelectOption = { value: string; label: string };
+
+function ChatSelect({
+  ariaLabel,
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  ariaLabel: string;
+  value: string;
+  options: SelectOption[];
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+  const selected = options.find((option) => option.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsidePress = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePress);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePress);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (disabled) setOpen(false);
+  }, [disabled]);
+
+  return (
+    <div className={`codex-custom-select ${open ? "open" : ""}`} ref={rootRef}>
+      <button
+        type="button"
+        className="codex-select-trigger"
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={menuId}
+        disabled={disabled}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span>{selected?.label}</span>
+        <i aria-hidden="true" />
+      </button>
+      {open && (
+        <div className="codex-select-menu" id={menuId} role="listbox" aria-label={ariaLabel}>
+          {options.map((option) => {
+            const isSelected = option.value === value;
+            return (
+              <button
+                type="button"
+                className={isSelected ? "selected" : ""}
+                role="option"
+                aria-selected={isSelected}
+                key={option.value}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+              >
+                <span>{option.label}</span>
+                {isSelected && <IconCheck />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const CODEX_MODELS = [
   { value: "gpt-5.6-sol", label: "5.6 Sol", defaultReasoning: "low", reasoning: ["low", "medium", "high", "xhigh", "max", "ultra"], fast: true },
@@ -63,7 +147,14 @@ export function CodexChat() {
   const mutateSession = useCodexChat((s) => s.mutateSession);
   const resetSession = useCodexChat((s) => s.resetSession);
   const logRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const chatRef = useRef<HTMLElement>(null);
+  const focusComposerOnOpenRef = useRef(false);
+  const dragControls = useDragControls();
+  const [dragConstraints, setDragConstraints] = useState({ left: 0, right: 0, top: 0, bottom: 0 });
   const input = session?.input ?? "";
+  const inputImages = session?.inputImages ?? [];
+  const promptQueue = session?.promptQueue ?? [];
   const messages = session?.messages ?? [];
   const progress = session?.progress ?? null;
   const pendingCustomCode = session?.pendingCustomCode ?? null;
@@ -75,9 +166,10 @@ export function CodexChat() {
   const reasoningLevels = REASONING_LEVELS.filter((option) => modelConfig.reasoning.includes(option.value));
   const speedTiers = modelConfig.fast ? SPEED_TIERS : SPEED_TIERS.slice(0, 1);
   const authenticated = authState === "authenticated";
+  const [interruptingQueueId, setInterruptingQueueId] = useState<string | null>(null);
 
-  const canSend = Boolean(projectId && authenticated && input.trim() && !busy && !agentBusy && !pendingCustomCode);
-  const visibleMessages = useMemo(() => messages.filter((message) => message.text.trim()), [messages]);
+  const canSend = Boolean(projectId && authenticated && (input.trim() || inputImages.length) && !busy && !agentBusy && !pendingCustomCode && !interruptingQueueId);
+  const visibleMessages = useMemo(() => messages.filter((message) => message.text.trim() || message.images?.length), [messages]);
 
   useEffect(() => {
     if (projectId) ensureSession(projectId);
@@ -113,6 +205,51 @@ export function CodexChat() {
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
   }, [visibleMessages, progress, open]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    const toggleChatWithTab = (event: KeyboardEvent) => {
+      if (
+        event.key !== "Tab" ||
+        event.shiftKey ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.repeat ||
+        event.isComposing
+      ) {
+        return;
+      }
+      event.preventDefault();
+      setOpen((current) => {
+        focusComposerOnOpenRef.current = !current;
+        if (!current) void refreshCodexAuthentication();
+        return !current;
+      });
+    };
+    window.addEventListener("keydown", toggleChatWithTab);
+    return () => window.removeEventListener("keydown", toggleChatWithTab);
+  }, [projectId]);
+
+  const updateDragConstraints = useCallback(() => {
+    const element = chatRef.current;
+    if (!element) return;
+    const left = element.offsetLeft;
+    const top = element.offsetTop;
+    setDragConstraints({
+      left: -left,
+      right: window.innerWidth - left - element.offsetWidth,
+      top: -top,
+      bottom: window.innerHeight - top - element.offsetHeight,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    updateDragConstraints();
+    window.addEventListener("resize", updateDragConstraints);
+    return () => window.removeEventListener("resize", updateDragConstraints);
+  }, [open, updateDragConstraints]);
 
   if (!project || !projectId) return null;
 
@@ -164,16 +301,20 @@ export function CodexChat() {
     }
   };
 
-  const send = async () => {
-    const prompt = input.trim();
-    if (!canSend || !prompt) return;
-    const generation = useCodexChat.getState().ensureSession(projectId).generation;
-    const conversation = visibleMessages.slice(-8);
-    updateSession(projectId, { input: "" });
-    updateSession(projectId, { busy: true });
+  async function runPrompt(promptText: string, images: CodexImageAttachment[] = []) {
+    if (!projectId) return;
+    const prompt = promptText.trim();
+    const currentSession = useCodexChat.getState().ensureSession(projectId);
+    if (!authenticated || (!prompt && !images.length) || currentSession.busy || currentSession.pendingCustomCode) return;
+    const generation = currentSession.generation;
+    const runId = currentSession.runId + 1;
+    const conversation = currentSession.messages
+      .filter((message) => message.text.trim())
+      .slice(-8)
+      .map(({ role, text }) => ({ role, text }));
+    updateSession(projectId, { busy: true, runId, progress: { type: "status", text: "Thinking..." } });
     useDocument.getState().setAgentBusy(true);
-    updateSession(projectId, { progress: { type: "status", text: "Thinking..." } });
-    appendMessage(projectId, { role: "user", text: prompt }, generation);
+    appendMessage(projectId, { role: "user", text: prompt, images }, generation);
     try {
       await useDocument.getState().flushSave();
       const currentProject = useDocument.getState().project;
@@ -181,6 +322,7 @@ export function CodexChat() {
       await api.codexStartSession(projectId);
       const result = await api.codexSend(projectId, {
         prompt,
+        images,
         conversation,
         selection,
         model,
@@ -190,7 +332,7 @@ export function CodexChat() {
         currentPageId: context?.kind === "page" ? context.pageId : undefined,
         breakpoint,
       });
-      if (!isCurrentChat(projectId, generation)) return;
+      if (!isCurrentRun(projectId, generation, runId)) return;
       mutateSession(projectId, (current) => {
         const next = [...current.messages];
         const last = next[next.length - 1];
@@ -207,14 +349,112 @@ export function CodexChat() {
         updateSession(projectId, { pendingCustomCode: result.customCodeProposal });
       }
     } catch (err) {
-      appendMessage(projectId, { role: "assistant", text: String((err as Error).message || err) }, generation);
+      if (isCurrentRun(projectId, generation, runId)) {
+        appendMessage(projectId, { role: "assistant", text: String((err as Error).message || err) }, generation);
+      }
     } finally {
-      if (!isCurrentChat(projectId, generation)) return;
+      if (!isCurrentRun(projectId, generation, runId)) return;
       updateSession(projectId, { busy: false });
       useDocument.getState().setAgentBusy(false);
       updateSession(projectId, { progress: null });
+      window.setTimeout(() => processNextQueuedPrompt(generation), 0);
     }
-  };
+  }
+
+  function queueDraft() {
+    if (!projectId) return;
+    const current = useCodexChat.getState().ensureSession(projectId);
+    const prompt = current.input.trim();
+    if (!authenticated || (!prompt && !current.inputImages.length) || pendingCustomCode) return;
+    mutateSession(projectId, (current) => ({
+      ...current,
+      input: "",
+      inputImages: [],
+      promptQueue: [...current.promptQueue, { id: nanoid(), text: prompt, images: current.inputImages }],
+    }));
+  }
+
+  function submitDraft() {
+    if (!projectId) return;
+    const current = useCodexChat.getState().ensureSession(projectId);
+    const prompt = current.input.trim();
+    const images = current.inputImages;
+    if (!prompt && !images.length) return;
+    if (current.busy || interruptingQueueId) {
+      queueDraft();
+      return;
+    }
+    updateSession(projectId, { input: "", inputImages: [] });
+    void runPrompt(prompt, images);
+  }
+
+  function processNextQueuedPrompt(generation: number) {
+    if (!projectId) return;
+    const current = useCodexChat.getState().ensureSession(projectId);
+    if (
+      current.generation !== generation ||
+      current.busy ||
+      current.pendingCustomCode ||
+      !current.promptQueue.length
+    ) {
+      return;
+    }
+    const [next, ...remaining] = current.promptQueue;
+    updateSession(projectId, { promptQueue: remaining });
+    void runPrompt(next.text, next.images);
+  }
+
+  function editQueuedPrompt(id: string) {
+    if (!projectId) return;
+    const queued = useCodexChat.getState().ensureSession(projectId).promptQueue.find((item) => item.id === id);
+    if (!queued) return;
+    mutateSession(projectId, (current) => ({
+      ...current,
+      input: queued.text,
+      inputImages: queued.images,
+      promptQueue: current.promptQueue.filter((item) => item.id !== id),
+    }));
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(queued.text.length, queued.text.length);
+    });
+  }
+
+  function deleteQueuedPrompt(id: string) {
+    if (!projectId) return;
+    mutateSession(projectId, (current) => ({
+      ...current,
+      promptQueue: current.promptQueue.filter((item) => item.id !== id),
+    }));
+  }
+
+  async function interruptWithQueuedPrompt(id: string) {
+    if (!projectId) return;
+    const current = useCodexChat.getState().ensureSession(projectId);
+    const queued = current.promptQueue.find((item) => item.id === id);
+    if (!queued || interruptingQueueId) return;
+    const generation = current.generation;
+    setInterruptingQueueId(id);
+    mutateSession(projectId, (session) => ({
+      ...session,
+      busy: false,
+      progress: null,
+      runId: session.runId + 1,
+      promptQueue: session.promptQueue.filter((item) => item.id !== id),
+    }));
+    useDocument.getState().setAgentBusy(false);
+    try {
+      await api.codexStop(projectId);
+      setInterruptingQueueId(null);
+      if (isCurrentChat(projectId, generation)) void runPrompt(queued.text, queued.images);
+    } catch (err) {
+      if (isCurrentChat(projectId, generation)) {
+        appendMessage(projectId, { role: "assistant", text: String((err as Error).message || err) }, generation);
+      }
+    } finally {
+      setInterruptingQueueId(null);
+    }
+  }
 
   const applyCustomCode = async () => {
     if (!pendingCustomCode || !projectId) return;
@@ -244,44 +484,113 @@ export function CodexChat() {
       updateSession(projectId, { busy: false });
       useDocument.getState().setAgentBusy(false);
       updateSession(projectId, { progress: null });
+      window.setTimeout(() => processNextQueuedPrompt(generation), 0);
     }
   };
 
   const cancelCustomCode = () => {
     updateSession(projectId, { pendingCustomCode: null });
     appendMessage(projectId, { role: "assistant", text: "Custom code changes were not applied." });
+    window.setTimeout(() => processNextQueuedPrompt(useCodexChat.getState().ensureSession(projectId).generation), 0);
   };
 
   const stop = async () => {
     if (!projectId) return;
-    await api.codexStop(projectId).catch(() => {});
-    updateSession(projectId, { busy: false });
+    mutateSession(projectId, (current) => ({
+      ...current,
+      busy: false,
+      progress: null,
+      runId: current.runId + 1,
+    }));
     useDocument.getState().setAgentBusy(false);
-    updateSession(projectId, { progress: null });
+    await api.codexStop(projectId).catch(() => {});
   };
 
-  const refreshChat = () => {
-    if (busy) void stop();
+  const refreshChat = async () => {
+    if (busy) await stop();
     resetSession(projectId);
   };
 
+  async function handlePastedImages(event: ReactClipboardEvent<HTMLTextAreaElement>) {
+    if (!projectId) return;
+    const files = Array.from(event.clipboardData.items)
+      .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => Boolean(file));
+    if (!files.length) return;
+    event.preventDefault();
+    const current = useCodexChat.getState().ensureSession(projectId);
+    const availableSlots = Math.max(0, 8 - current.inputImages.length);
+    const generation = current.generation;
+    const attachments = await Promise.all(
+      files.slice(0, availableSlots).map(async (file, index) => ({
+        id: nanoid(),
+        name: file.name || `Pasted image ${current.inputImages.length + index + 1}`,
+        dataUrl: await readFileAsDataUrl(file),
+      })),
+    );
+    if (!attachments.length || !isCurrentChat(projectId, generation)) return;
+    mutateSession(projectId, (session) => ({
+      ...session,
+      inputImages: [...session.inputImages, ...attachments].slice(0, 8),
+    }));
+  }
+
+  function removeInputImage(id: string) {
+    if (!projectId) return;
+    mutateSession(projectId, (current) => ({
+      ...current,
+      inputImages: current.inputImages.filter((image) => image.id !== id),
+    }));
+  }
+
   return (
-    <>
-      <button
-        className={`codex-fab ${open ? "active" : ""}`}
-        title="Codex AI"
-        onClick={() =>
-          setOpen((value) => {
-            if (!value) void refreshCodexAuthentication();
-            return !value;
-          })
-        }
-      >
-        <IconSparkle />
-      </button>
-      {open && (
-        <section className="codex-chat" aria-label="Codex AI chat">
-          <header className="codex-chat-header">
+    <AnimatePresence mode="wait" initial={false}>
+      {!open ? (
+        <motion.button
+          key="codex-launcher"
+          className="codex-fab"
+          title="Codex AI (Tab)"
+          initial={{ opacity: 0, scale: 0.78 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.78 }}
+          transition={{ duration: 0.14, ease: [0.22, 1, 0.36, 1] }}
+          onClick={() => {
+            focusComposerOnOpenRef.current = false;
+            void refreshCodexAuthentication();
+            setOpen(true);
+          }}
+        >
+          <IconSparkle />
+        </motion.button>
+      ) : (
+        <motion.section
+          key="codex-chat"
+          ref={chatRef}
+          className="codex-chat"
+          aria-label="Codex AI chat"
+          drag
+          dragControls={dragControls}
+          dragListener={false}
+          dragConstraints={dragConstraints}
+          dragElastic={0}
+          dragMomentum={false}
+          initial={{ opacity: 0, y: 14, scale: 0.955 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.97 }}
+          transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+          onAnimationComplete={() => {
+            updateDragConstraints();
+            focusComposerOnOpenRef.current = false;
+          }}
+        >
+          <header
+            className="codex-chat-header"
+            onPointerDown={(event) => {
+              if ((event.target as HTMLElement).closest("button")) return;
+              dragControls.start(event);
+            }}
+          >
             <div>
               <strong>Codex</strong>
               <span>{authLabel(authState)}</span>
@@ -290,7 +599,7 @@ export function CodexChat() {
               <button className="icon-btn" title="Refresh chat" onClick={refreshChat}>
                 <IconRefresh />
               </button>
-              <button className="icon-btn" title="Close" onClick={() => setOpen(false)}>
+              <button className="icon-btn" title="Close (Tab)" onClick={() => setOpen(false)}>
                 <IconClose />
               </button>
             </div>
@@ -313,7 +622,14 @@ export function CodexChat() {
             )}
             {visibleMessages.map((message, index) => (
               <div key={index} className={`codex-message ${message.role}`}>
-                {message.text}
+                {message.images?.length ? (
+                  <div className="codex-message-images">
+                    {message.images.map((image) => (
+                      <img src={image.dataUrl} alt={image.name} key={image.id} />
+                    ))}
+                  </div>
+                ) : null}
+                {message.text ? <div className="codex-message-text">{message.text}</div> : null}
               </div>
             ))}
             {pendingCustomCode && (
@@ -321,8 +637,15 @@ export function CodexChat() {
                 <strong>Apply custom code?</strong>
                 <p>
                   This will override {project.nodes[pendingCustomCode.nodeId]?.name || pendingCustomCode.nodeId} with custom
-                  HTML/CSS and gray out its properties panel.
+                  HTML/CSS{pendingCustomCode.behaviors?.length ? ` and ${pendingCustomCode.behaviors.length} scoped interaction${pendingCustomCode.behaviors.length === 1 ? "" : "s"}` : ""} and gray out its properties panel.
                 </p>
+                {pendingCustomCode.behaviors?.length ? (
+                  <div className="codex-custom-capabilities">
+                    {[...new Set(pendingCustomCode.behaviors.map((behavior) => behavior.event))].map((event) => (
+                      <span key={event}>{event}</span>
+                    ))}
+                  </div>
+                ) : null}
                 {pendingCustomCode.note && <p>{pendingCustomCode.note}</p>}
                 <div className="codex-custom-actions">
                   <button className="btn primary" disabled={busy || agentBusy} onClick={applyCustomCode}>
@@ -338,88 +661,139 @@ export function CodexChat() {
 
           {authenticated && busy && progress && <div className={`codex-progress ${progress.type}`}>{progressText(progress)}</div>}
 
-          <div className="codex-run-settings" aria-label="Codex run settings">
-            <label>
-              <span>Model</span>
-              <select
-                aria-label="Model"
-                value={model}
-                disabled={busy || agentBusy}
-                onChange={(event) => {
-                  const nextModel = CODEX_MODELS.find((option) => option.value === event.target.value) ?? CODEX_MODELS[0];
-                  updateSession(projectId, {
-                    model: nextModel.value,
-                    reasoning: nextModel.reasoning.includes(reasoning) ? reasoning : nextModel.defaultReasoning,
-                    speed: nextModel.fast ? speed : "default",
-                  });
-                }}
+          <AnimatePresence initial={false}>
+            {promptQueue.length > 0 && (
+              <motion.div
+                className="codex-prompt-queue"
+                aria-label="Queued messages"
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 4 }}
               >
-                {CODEX_MODELS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
+                {promptQueue.map((queued, index) => (
+                  <motion.div
+                    className="codex-queued-prompt"
+                    key={queued.id}
+                    layout
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                  >
+                    <div className="codex-queued-copy">
+                      <span>{index === 0 ? "Next" : `Queued ${index + 1}`}</span>
+                      {queued.images.length ? (
+                        <div className="codex-queued-images" aria-label={`${queued.images.length} attached image${queued.images.length === 1 ? "" : "s"}`}>
+                          {queued.images.slice(0, 3).map((image) => <img src={image.dataUrl} alt="" key={image.id} />)}
+                          {queued.images.length > 3 ? <b>+{queued.images.length - 3}</b> : null}
+                        </div>
+                      ) : null}
+                      {queued.text ? <p>{queued.text}</p> : null}
+                    </div>
+                    <div className="codex-queued-actions">
+                      <button type="button" aria-label="Edit queued message" title="Edit" onClick={() => editQueuedPrompt(queued.id)}>
+                        <IconPencil />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="Send queued message now"
+                        title="Send now and interrupt"
+                        disabled={Boolean(interruptingQueueId)}
+                        onClick={() => void interruptWithQueuedPrompt(queued.id)}
+                      >
+                        <IconArrowUp />
+                      </button>
+                      <button type="button" aria-label="Delete queued message" title="Delete" onClick={() => deleteQueuedPrompt(queued.id)}>
+                        <IconClose />
+                      </button>
+                    </div>
+                  </motion.div>
                 ))}
-              </select>
-            </label>
-            <label>
-              <span>Thinking</span>
-              <select
-                aria-label="Thinking level"
-                value={reasoning}
-                disabled={busy || agentBusy}
-                onChange={(event) => updateSession(projectId, { reasoning: event.target.value })}
-              >
-                {reasoningLevels.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <span>Speed</span>
-              <select
-                aria-label="Speed"
-                value={speed}
-                disabled={busy || agentBusy}
-                onChange={(event) => updateSession(projectId, { speed: event.target.value })}
-              >
-                {speedTiers.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <form
             className="codex-composer"
             onSubmit={(event) => {
               event.preventDefault();
               if (busy) void stop();
-              else void send();
+              else submitDraft();
             }}
           >
-            <textarea
-              value={input}
-              placeholder={authenticated ? "Ask Codex to edit this project..." : "Login to Codex first"}
-              disabled={!authenticated || Boolean(pendingCustomCode)}
-              onChange={(event) => updateSession(projectId, { input: event.target.value })}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                  event.preventDefault();
-                  void send();
-                }
-              }}
-            />
-            <button className={`btn ${busy ? "danger" : "primary"}`} disabled={!busy && !canSend}>
-              {busy ? "Stop" : "Send"}
-            </button>
+            <div className="codex-composer-field">
+              {inputImages.length ? (
+                <div className="codex-input-images" aria-label="Attached images">
+                  {inputImages.map((image) => (
+                    <div className="codex-input-image" key={image.id}>
+                      <img src={image.dataUrl} alt={image.name} />
+                      <button type="button" aria-label={`Remove ${image.name}`} title="Remove image" onClick={() => removeInputImage(image.id)}>
+                        <IconClose />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <textarea
+                ref={inputRef}
+                autoFocus={focusComposerOnOpenRef.current}
+                value={input}
+                placeholder={authenticated ? (busy ? "Queue your next message..." : "Ask Codex to edit this project...") : "Login to Codex first"}
+                disabled={!authenticated || Boolean(pendingCustomCode)}
+                onChange={(event) => updateSession(projectId, { input: event.target.value })}
+                onPaste={(event) => void handlePastedImages(event)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+                    event.preventDefault();
+                    submitDraft();
+                  }
+                }}
+              />
+              <div className="codex-composer-footer">
+                <div className="codex-run-settings" aria-label="Codex run settings">
+                  <ChatSelect
+                    ariaLabel="Model"
+                    value={model}
+                    options={CODEX_MODELS}
+                    disabled={busy || agentBusy}
+                    onChange={(value) => {
+                      const nextModel = CODEX_MODELS.find((option) => option.value === value) ?? CODEX_MODELS[0];
+                      updateSession(projectId, {
+                        model: nextModel.value,
+                        reasoning: nextModel.reasoning.includes(reasoning) ? reasoning : nextModel.defaultReasoning,
+                        speed: nextModel.fast ? speed : "default",
+                      });
+                    }}
+                  />
+                  <ChatSelect
+                    ariaLabel="Thinking level"
+                    value={reasoning}
+                    options={reasoningLevels}
+                    disabled={busy || agentBusy}
+                    onChange={(value) => updateSession(projectId, { reasoning: value })}
+                  />
+                  <ChatSelect
+                    ariaLabel="Speed"
+                    value={speed}
+                    options={speedTiers}
+                    disabled={busy || agentBusy}
+                    onChange={(value) => updateSession(projectId, { speed: value })}
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className={`codex-submit ${busy ? "stop" : ""}`}
+                  aria-label={busy ? "Stop Codex" : "Send message"}
+                  title={busy ? "Stop" : "Send"}
+                  disabled={!busy && !canSend}
+                >
+                  {busy ? <IconStop /> : <IconArrowUp />}
+                </button>
+              </div>
+            </div>
           </form>
-        </section>
+        </motion.section>
       )}
-    </>
+    </AnimatePresence>
   );
 }
 
@@ -460,4 +834,18 @@ function appendMessage(projectId: string, message: CodexMessage, generation?: nu
 
 function isCurrentChat(projectId: string, generation: number) {
   return useCodexChat.getState().ensureSession(projectId).generation === generation;
+}
+
+function isCurrentRun(projectId: string, generation: number, runId: number) {
+  const session = useCodexChat.getState().ensureSession(projectId);
+  return session.generation === generation && session.runId === runId;
+}
+
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Could not read the pasted image."));
+    reader.readAsDataURL(file);
+  });
 }

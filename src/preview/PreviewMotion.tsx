@@ -86,6 +86,7 @@ export function PreviewMotion({
   scrollRoot,
   style,
   children,
+  elementRef,
   ...rest
 }: {
   tag?: string;
@@ -93,6 +94,7 @@ export function PreviewMotion({
   scrollRoot: RefObject<Element | null>;
   style?: CSSProperties;
   children?: ReactNode;
+  elementRef?: (node: HTMLElement | null) => void;
 } & Record<string, unknown>) {
   const elRef = useRef<HTMLElement | null>(null);
   const [elVersion, setElVersion] = useState(0);
@@ -116,6 +118,7 @@ export function PreviewMotion({
   return (
     <Comp
       ref={(node: HTMLElement | null) => {
+        elementRef?.(node);
         if (elRef.current !== node) {
           elRef.current = node;
           if (node) setElVersion((v) => v + 1);

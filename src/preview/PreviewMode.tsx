@@ -2,11 +2,12 @@ import { createElement, useCallback, useEffect, useMemo, useRef, useState, type 
 import { BREAKPOINTS, type BreakpointId, type CmsCollection, type CmsEntry, type InstanceOverride, type Node, type Page, type SerializedProject } from "@/model/types";
 import { buildClipMotionMap } from "@/model/animation";
 import { getHoverStyles } from "@/model/hover";
-import { nodeStyles } from "@/model/resolve";
+import { nodeStyles, resolveComponentVariant } from "@/model/resolve";
 import { stylesToCss, fillToCss, shadowToCss, type CssContext } from "@/model/css";
-import { sanitizeCustomCodeHtml, scopeCustomCodeCss } from "@/model/customCode";
+import type { CustomCodeBlock } from "@/model/types";
 import { useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
+import { CustomCodeContent, useCustomBehaviorHost } from "@/ui/CustomCodeRuntime";
 import { IconClose, IconDesktop, IconFullWidth, IconPhone, IconRefresh, IconTablet } from "@/ui/icons";
 import { PreviewMotion } from "./PreviewMotion";
 import { usePreviewShortcuts, type PreviewWidthMode } from "./usePreviewShortcuts";
@@ -116,10 +117,52 @@ function motionFor(node: Node, skipEntrance = false): Record<string, unknown> {
   return out;
 }
 
+function PreviewCustomCode({
+  nodeId,
+  code,
+  style,
+  anim,
+  scrollRoot,
+  onClick,
+}: {
+  nodeId: string;
+  code: CustomCodeBlock;
+  style: CSSProperties;
+  anim: Record<string, unknown>;
+  scrollRoot: RefObject<Element | null>;
+  onClick?: (event: React.MouseEvent) => void;
+}) {
+  const hostRef = useCustomBehaviorHost(code.behaviors, code.html);
+  const content = <CustomCodeContent nodeId={nodeId} html={code.html} css={code.css} />;
+  if (Object.keys(anim).length > 0) {
+    return (
+      <PreviewMotion
+        tag="div"
+        anim={anim}
+        scrollRoot={scrollRoot}
+        style={style}
+        onClick={onClick}
+        elementRef={(node) => {
+          hostRef.current = node;
+        }}
+        data-custom-code-node={nodeId}
+        data-custom-code="true"
+      >
+        {content}
+      </PreviewMotion>
+    );
+  }
+  return (
+    <div ref={hostRef as React.Ref<HTMLDivElement>} data-custom-code-node={nodeId} data-custom-code="true" style={style} onClick={onClick}>
+      {content}
+    </div>
+  );
+}
+
 function PreviewNode({ id, env, parentCtx }: { id: string; env: PreviewEnv; parentCtx: CssContext }) {
   const node = env.project.nodes[id];
   if (!node) return null;
-  const override = env.overrides?.[id];
+  const override = env.overrides?.[id] ?? (node.variantSourceId ? env.overrides?.[node.variantSourceId] : undefined);
   if (override?.visible === false) return null;
 
   const props = nodeStyles(node, env.project, env.breakpoint);
@@ -130,36 +173,19 @@ function PreviewNode({ id, env, parentCtx }: { id: string; env: PreviewEnv; pare
   const childCtx: CssContext = { parentLayout: props.layout ?? "absolute", parentDirection: props.direction ?? "column" };
   const link = linkProps(node, env);
   const clipAnim = env.clipMotion?.[id];
-  const anim = clipAnim ? { ...motionFor(node, true), ...clipAnim } : motionFor(node);
+  let anim = clipAnim ? { ...motionFor(node, true), ...clipAnim } : motionFor(node);
+  // Fixed/sticky layers are already in the preview viewport. Waiting for an
+  // observer can leave an entrance animation permanently at its hidden state.
+  if (props.sticky && anim.whileInView) {
+    const { whileInView, viewport: _viewport, ...rest } = anim;
+    anim = { ...rest, animate: whileInView };
+  }
   const hasAnim = Object.keys(anim).length > 0;
 
   if (node.customCode) {
-    const scopedCss = scopeCustomCodeCss(node.id, node.customCode.css);
-    const content = (
-      <>
-        {scopedCss ? <style>{scopedCss}</style> : null}
-        <div dangerouslySetInnerHTML={{ __html: sanitizeCustomCodeHtml(node.customCode.html) }} />
-      </>
-    );
     const customStyle = { ...style, ...link.style };
-    if (hasAnim) {
-      return (
-        <PreviewMotion
-          tag="div"
-          anim={anim}
-          scrollRoot={env.scrollRoot}
-          style={customStyle}
-          onClick={link.onClick}
-          data-custom-code-node={node.id}
-        >
-          {content}
-        </PreviewMotion>
-      );
-    }
     return (
-      <div data-custom-code-node={node.id} style={customStyle} onClick={link.onClick}>
-        {content}
-      </div>
+      <PreviewCustomCode nodeId={node.id} code={node.customCode} style={customStyle} anim={hasAnim ? anim : {}} scrollRoot={env.scrollRoot} onClick={link.onClick} />
     );
   }
 
@@ -190,7 +216,7 @@ function PreviewNode({ id, env, parentCtx }: { id: string; env: PreviewEnv; pare
       return <span style={style} dangerouslySetInnerHTML={{ __html: node.svg ?? "" }} />;
     case "instance": {
       const comp = env.project.components.find((c) => c.id === node.componentId);
-      const masterRoot = comp ? env.project.nodes[comp.rootId] : null;
+      const masterRoot = comp ? env.project.nodes[resolveComponentVariant(comp, env.breakpoint).rootId] : null;
       if (!comp || !masterRoot) return null;
       const masterProps = nodeStyles(masterRoot, env.project, env.breakpoint);
       const masterStyle = stylesToCss(masterProps, masterRoot, { parentLayout: "stack", parentDirection: "column" }) as CSSProperties;
@@ -268,8 +294,10 @@ function clampPreviewWidth(width: number) {
 
 /** Pick responsive styles from the effective preview width. */
 function breakpointForWidth(width: number): BreakpointId {
-  if (width <= 389.98) return "phone";
-  if (width <= 809.98) return "tablet";
+  const phone = BREAKPOINTS.find((breakpoint) => breakpoint.id === "phone")!;
+  const tablet = BREAKPOINTS.find((breakpoint) => breakpoint.id === "tablet")!;
+  if (phone.maxWidth !== null && width <= phone.maxWidth) return "phone";
+  if (tablet.maxWidth !== null && width <= tablet.maxWidth) return "tablet";
   return "desktop";
 }
 
@@ -465,24 +493,25 @@ export function PreviewMode() {
       </div>
       <div className={`preview-stage ${widthMode === "full" ? "preview-stage--full" : ""}`}>
         <div
-          className={`preview-frame ${widthMode === "full" ? "preview-frame--full" : ""}`}
-          ref={scrollRootRef}
+          className={`preview-frame-shell ${widthMode === "full" ? "preview-frame-shell--full" : ""}`}
           style={frameStyle}
         >
-          {root ? (
-            <div key={refreshKey} style={{ ...rootStyle, position: "relative", width: "100%", minHeight: "100%" }}>
-              {root.children.map((c) => (
-                <PreviewNode
-                  key={c}
-                  id={c}
-                  env={env}
-                  parentCtx={{ parentLayout: rootProps?.layout ?? "stack", parentDirection: rootProps?.direction ?? "column" }}
-                />
-              ))}
-            </div>
-          ) : (
-            <div style={{ padding: 60, fontFamily: "Inter", color: "#999" }}>No page matches “{path}”.</div>
-          )}
+          <div className="preview-frame" ref={scrollRootRef}>
+            {root ? (
+              <div key={refreshKey} style={{ ...rootStyle, position: "relative", width: "100%", minHeight: "100%" }}>
+                {root.children.map((c) => (
+                  <PreviewNode
+                    key={c}
+                    id={c}
+                    env={env}
+                    parentCtx={{ parentLayout: rootProps?.layout ?? "stack", parentDirection: rootProps?.direction ?? "column" }}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: 60, fontFamily: "Inter", color: "#999" }}>No page matches “{path}”.</div>
+            )}
+          </div>
         </div>
       </div>
     </div>

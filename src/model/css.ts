@@ -89,10 +89,10 @@ export interface CssContext {
 export function stylesToCss(props: StyleProps, node: Node, ctx: CssContext = {}): CSSProperties {
   const css: CSSProperties = {};
   const parentLayout = ctx.parentLayout ?? "absolute";
-  // Stack/grid children with explicit x/y are positioned on the canvas — render absolute within the container.
-  const positionedInFlow = (parentLayout === "stack" || parentLayout === "grid") && !props.positionAbsolute && (props.x !== undefined || props.y !== undefined);
-  const inStack = parentLayout === "stack" && !props.positionAbsolute && !positionedInFlow;
-  const inGrid = parentLayout === "grid" && !props.positionAbsolute && !positionedInFlow;
+  // Stack/grid children obey their parent unless explicitly switched to Absolute.
+  // Stale x/y values must not silently opt an "In flow" layer out of layout.
+  const inStack = parentLayout === "stack" && !props.positionAbsolute;
+  const inGrid = parentLayout === "grid" && !props.positionAbsolute;
 
   // ── size
   Object.assign(css, sizeToCss(props.width, "w", inStack, ctx.parentDirection));
@@ -120,7 +120,7 @@ export function stylesToCss(props: StyleProps, node: Node, ctx: CssContext = {})
       if (p.top !== undefined) css.top = p.top;
       if (p.bottom !== undefined) css.bottom = p.bottom;
     }
-  } else if (props.positionAbsolute || positionedInFlow || (parentLayout === "absolute" && !inStack && !inGrid)) {
+  } else if (props.positionAbsolute || (parentLayout === "absolute" && !inStack && !inGrid)) {
     css.position = "absolute";
     css.left = props.x ?? 0;
     css.top = props.y ?? 0;
@@ -129,8 +129,11 @@ export function stylesToCss(props: StyleProps, node: Node, ctx: CssContext = {})
   }
   if (props.sticky && !ctx.editor) {
     css.position = "fixed";
-    css.top = props.stickyOffset ?? 0;
-    if (props.width?.mode === "fill" || props.width?.mode === "relative" || !props.width) {
+    // Absolute pins still describe where a sticky layer should sit. Preserve
+    // them so Preview/generated output matches the editor canvas.
+    css.top = props.positionAbsolute && props.pin?.top !== undefined ? props.pin.top : (props.stickyOffset ?? 0);
+    const centered = props.positionAbsolute && props.pin?.centerX;
+    if (!centered && (props.width?.mode === "fill" || props.width?.mode === "relative" || !props.width)) {
       css.left = 0;
       css.right = 0;
     } else if (css.left === undefined) {
@@ -139,9 +142,24 @@ export function stylesToCss(props: StyleProps, node: Node, ctx: CssContext = {})
     css.zIndex = props.zIndex ?? 1000;
   }
   if (props.zIndex !== undefined) css.zIndex = props.zIndex;
-  if (props.rotation) {
-    css.transform = `${css.transform ?? ""} rotate(${props.rotation}deg)`.trim();
+  const transforms = css.transform ? [String(css.transform)] : [];
+  if (props.perspective !== undefined || props.rotationX || props.rotationY || props.translateZ) {
+    transforms.push(`perspective(${Math.max(1, props.perspective ?? 800)}px)`);
   }
+  if (props.translateX || props.translateY || props.translateZ) {
+    transforms.push(`translate3d(${props.translateX ?? 0}px, ${props.translateY ?? 0}px, ${props.translateZ ?? 0}px)`);
+  }
+  if (props.rotation) transforms.push(`rotate(${props.rotation}deg)`);
+  if (props.rotationX) transforms.push(`rotateX(${props.rotationX}deg)`);
+  if (props.rotationY) transforms.push(`rotateY(${props.rotationY}deg)`);
+  if (props.scaleX !== undefined || props.scaleY !== undefined) {
+    transforms.push(`scale(${props.scaleX ?? 1}, ${props.scaleY ?? 1})`);
+  }
+  if (transforms.length > 0) css.transform = transforms.join(" ");
+  if (props.transformOriginX !== undefined || props.transformOriginY !== undefined) {
+    css.transformOrigin = `${props.transformOriginX ?? 50}% ${props.transformOriginY ?? 50}%`;
+  }
+  if (props.rotationX || props.rotationY || props.translateZ) css.transformStyle = "preserve-3d";
 
   // ── container layout
   if (node.type === "frame" || node.type === "instance" || node.type === "collectionList") {

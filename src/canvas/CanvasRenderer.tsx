@@ -1,12 +1,12 @@
 import { memo, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 import type { BreakpointId, CmsCollection, CmsEntry, InstanceOverride, Node, SerializedProject } from "@/model/types";
 import { resolveHoverAppearance } from "@/model/hover";
-import { ancestorChain, nodeStyles } from "@/model/resolve";
+import { ancestorChain, nodeStyles, resolveComponentVariant } from "@/model/resolve";
 import { stylesToCss, type CssContext } from "@/model/css";
-import { sanitizeCustomCodeHtml, scopeCustomCodeCss } from "@/model/customCode";
 import { docActions, useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
 import { useTimeline } from "@/store/timeline";
+import { CustomCodeRoot } from "@/ui/CustomCodeRuntime";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Renders a node subtree as real DOM inside an editor artboard. Every element
@@ -51,7 +51,7 @@ function EditableText({ node, env, style, hit }: { node: Node; env: RenderEnv; s
     }
   }, [isEditing]);
 
-  const override = env.overrides?.[node.id];
+  const override = env.overrides?.[node.id] ?? (node.variantSourceId ? env.overrides?.[node.variantSourceId] : undefined);
   const text = bindingValue(node, env) ?? override?.text ?? node.text ?? "";
 
   if (isEditing) {
@@ -96,7 +96,7 @@ export const RenderNode = memo(function RenderNode({ id, env, parentCtx }: { id:
   const selection = useEditor((s) => s.selection);
   if (!node) return null;
 
-  const override = env.overrides?.[id];
+  const override = env.overrides?.[id] ?? (node.variantSourceId ? env.overrides?.[node.variantSourceId] : undefined);
   if (override?.visible === false) return null;
 
   const hit = env.hitId ? env.hitId(id) : id;
@@ -130,12 +130,15 @@ export const RenderNode = memo(function RenderNode({ id, env, parentCtx }: { id:
   };
 
   if (node.customCode) {
-    const scopedCss = scopeCustomCodeCss(node.id, node.customCode.css);
     return (
-      <div data-node-id={hit} data-custom-code-node={node.id} data-custom-code="true" style={style}>
-        {scopedCss ? <style>{scopedCss}</style> : null}
-        <div dangerouslySetInnerHTML={{ __html: sanitizeCustomCodeHtml(node.customCode.html) }} />
-      </div>
+      <CustomCodeRoot
+        data-node-id={hit}
+        nodeId={node.id}
+        html={node.customCode.html}
+        css={node.customCode.css}
+        behaviors={node.customCode.behaviors}
+        style={style}
+      />
     );
   }
 
@@ -176,7 +179,7 @@ export const RenderNode = memo(function RenderNode({ id, env, parentCtx }: { id:
     case "instance": {
       const comp = env.project.components.find((c) => c.id === node.componentId);
       if (!comp) return <div data-node-id={hit} style={style} />;
-      const masterRoot = env.project.nodes[comp.rootId];
+      const masterRoot = env.project.nodes[resolveComponentVariant(comp, env.breakpoint).rootId];
       if (!masterRoot) return null;
       const masterProps = nodeStyles(masterRoot, env.project, env.breakpoint);
       // instance wrapper carries position; master root renders inside without position

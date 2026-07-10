@@ -1,11 +1,38 @@
 import {
   BREAKPOINT_CASCADE,
   type BreakpointId,
+  type ComponentDef,
+  type ComponentVariant,
   type Node,
   type ResponsiveStyles,
   type SerializedProject,
   type StyleProps,
 } from "./types";
+
+/** Return real variants, or a virtual Default variant for legacy components. */
+export function componentVariants(component: ComponentDef): ComponentVariant[] {
+  return component.variants?.length
+    ? component.variants
+    : [{ id: `${component.id}:default`, name: "Default", rootId: component.rootId }];
+}
+
+/** Resolve a component's structural state with desktop -> tablet -> phone inheritance. */
+export function resolveComponentVariant(component: ComponentDef, breakpoint: BreakpointId): ComponentVariant {
+  const variants = componentVariants(component);
+  const byId = new Map(variants.map((variant) => [variant.id, variant]));
+  const mapping = component.variantByBreakpoint ?? {};
+  const requested =
+    breakpoint === "phone"
+      ? (mapping.phone ?? mapping.tablet ?? mapping.desktop)
+      : breakpoint === "tablet"
+        ? (mapping.tablet ?? mapping.desktop)
+        : mapping.desktop;
+  return (requested ? byId.get(requested) : undefined) ?? variants.find((variant) => variant.rootId === component.rootId) ?? variants[0];
+}
+
+export function componentRootIds(component: ComponentDef): string[] {
+  return [...new Set(componentVariants(component).map((variant) => variant.rootId))];
+}
 
 /**
  * Resolve the effective styles of a node at a given breakpoint by cascading
@@ -101,6 +128,7 @@ export function cloneSubtree(
   nodes: Record<string, Node>,
   rootId: string,
   makeId: () => string,
+  linkVariantSource = false,
 ): { rootId: string; nodes: Record<string, Node> } {
   const idMap = new Map<string, string>();
   const ids = collectSubtree(nodes, rootId);
@@ -112,6 +140,7 @@ export function cloneSubtree(
     clone.id = idMap.get(id)!;
     clone.parent = src.parent && idMap.has(src.parent) ? idMap.get(src.parent)! : null;
     clone.children = src.children.map((c) => idMap.get(c)!);
+    if (linkVariantSource) clone.variantSourceId = src.variantSourceId ?? src.id;
     out[clone.id] = clone;
   }
   return { rootId: idMap.get(rootId)!, nodes: out };

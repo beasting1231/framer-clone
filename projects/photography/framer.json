@@ -4,7 +4,7 @@
     "id": "photography",
     "name": "photography",
     "createdAt": "2026-07-09T17:00:03.994Z",
-    "updatedAt": "2026-07-10T04:26:25.547Z"
+    "updatedAt": "2026-07-10T07:38:55.890Z"
   },
   "pages": [
     {
@@ -63,10 +63,7 @@
       "name": "Hero",
       "parent": "vYq4CgmHf-",
       "children": [
-        "6MbH9sCCKR",
-        "guKeaqQHLY",
-        "NkCLrLAzRQ",
-        "Gpb2c6EJ7n"
+        "6CNNRN8lVI"
       ],
       "styles": {
         "desktop": {
@@ -83,9 +80,9 @@
           "align": "center",
           "justify": "center",
           "padding": {
-            "top": 150,
+            "top": 0,
             "right": 48,
-            "bottom": 120,
+            "bottom": 0,
             "left": 48
           },
           "fill": {
@@ -97,7 +94,7 @@
                 "position": 0
               },
               {
-                "color": "#000000",
+                "color": "#5c1e1e",
                 "position": 1
               }
             ]
@@ -109,8 +106,8 @@
     "6MbH9sCCKR": {
       "id": "6MbH9sCCKR",
       "type": "text",
-      "name": "Heading",
-      "parent": "2wQKQN-fW3",
+      "name": "Header",
+      "parent": "6CNNRN8lVI",
       "children": [],
       "styles": {
         "desktop": {
@@ -127,7 +124,9 @@
           "color": "#FFFFFF",
           "textAlign": "center",
           "letterSpacing": -1.5,
-          "maxWidth": 760
+          "maxWidth": 760,
+          "x": 374,
+          "y": 46
         },
         "tablet": {
           "fontSize": 48
@@ -136,7 +135,7 @@
           "fontSize": 34
         }
       },
-      "text": "Capture the moments that matter",
+      "text": "Lumen Studio",
       "textTag": "h1",
       "effects": {
         "entrance": {
@@ -147,249 +146,24 @@
         }
       }
     },
-    "guKeaqQHLY": {
-      "id": "guKeaqQHLY",
-      "type": "text",
-      "name": "Subheading",
-      "parent": "2wQKQN-fW3",
-      "children": [],
-      "styles": {
-        "desktop": {
-          "width": {
-            "mode": "fit"
-          },
-          "height": {
-            "mode": "fit"
-          },
-          "fontFamily": "Inter",
-          "fontSize": 19,
-          "fontWeight": 400,
-          "lineHeight": 1.5,
-          "color": "#FFFFFF",
-          "textAlign": "center",
-          "maxWidth": 560
-        },
-        "phone": {
-          "fontSize": 16
-        }
-      },
-      "text": "Elegant photography for portraits, weddings, and stories worth preserving.",
-      "textTag": "p",
-      "effects": {
-        "entrance": {
-          "preset": "slide-up",
-          "duration": 0.7,
-          "delay": 0.15,
-          "onScroll": false
-        }
-      }
-    },
-    "NkCLrLAzRQ": {
-      "id": "NkCLrLAzRQ",
-      "type": "frame",
-      "name": "Buttons",
-      "parent": "2wQKQN-fW3",
-      "children": [
-        "mKC9xcrqSW"
-      ],
-      "styles": {
-        "desktop": {
-          "width": {
-            "mode": "fit"
-          },
-          "height": {
-            "mode": "fit"
-          },
-          "layout": "stack",
-          "direction": "row",
-          "gap": 12,
-          "align": "center",
-          "justify": "center",
-          "padding": {
-            "top": 8,
-            "right": 0,
-            "bottom": 0,
-            "left": 0
-          },
-          "fill": null
-        }
-      },
-      "tag": "div",
-      "effects": {
-        "entrance": {
-          "preset": "slide-up",
-          "duration": 0.7,
-          "delay": 0.3,
-          "onScroll": false
-        }
-      }
-    },
-    "Gpb2c6EJ7n": {
-      "id": "Gpb2c6EJ7n",
-      "type": "frame",
-      "name": "Button",
-      "parent": "2wQKQN-fW3",
-      "children": [
-        "doLRNayTfq"
-      ],
-      "styles": {
-        "desktop": {
-          "width": {
-            "mode": "fixed",
-            "value": 148
-          },
-          "height": {
-            "mode": "fixed",
-            "value": 68
-          },
-          "layout": "stack",
-          "direction": "row",
-          "gap": 8,
-          "align": "center",
-          "justify": "center",
-          "padding": {
-            "top": 12,
-            "right": 24,
-            "bottom": 12,
-            "left": 24
-          },
-          "fill": {
-            "type": "solid",
-            "color": "#2D2D2D"
-          },
-          "radius": 10,
-          "cursor": "pointer"
-        }
-      },
-      "tag": "button",
-      "effects": {
-        "hover": {
-          "scale": 1.03,
-          "duration": 0.2
-        },
-        "pressScale": 0.97
-      },
-      "customCode": {
-        "html": "<span class=\"shimmer-label\">View Portfolio</span>",
-        "css": ":host { position: relative; overflow: hidden; } :host .shimmer-label { position: relative; z-index: 1; } :host::before { content: \"\"; position: absolute; top: 0; bottom: 0; left: -75%; width: 50%; background: linear-gradient(120deg, transparent, rgba(255,255,255,0.45), transparent); transform: skewX(-20deg); pointer-events: none; transition: none; } :host:hover::before { left: 125%; transition: left 700ms ease-out; }",
-        "note": "Restores the hover-triggered shimmer. The requested persistence after hover exit still requires JavaScript state.",
-        "appliedAt": "2026-07-10T04:26:25.547Z"
-      },
-      "locked": true
-    },
-    "doLRNayTfq": {
-      "id": "doLRNayTfq",
-      "type": "text",
-      "name": "Label",
-      "parent": "Gpb2c6EJ7n",
-      "children": [],
-      "styles": {
-        "desktop": {
-          "width": {
-            "mode": "fit"
-          },
-          "height": {
-            "mode": "fit"
-          },
-          "fontFamily": "Inter",
-          "fontSize": 15,
-          "fontWeight": 600,
-          "lineHeight": 1.4,
-          "color": "#FFFFFF",
-          "textAlign": "left"
-        }
-      },
-      "text": "View Portfolio",
-      "textTag": "p"
-    },
-    "mKC9xcrqSW": {
-      "id": "mKC9xcrqSW",
-      "type": "frame",
-      "name": "Button",
-      "parent": "NkCLrLAzRQ",
-      "children": [
-        "ifOhi36Be4"
-      ],
-      "styles": {
-        "desktop": {
-          "width": {
-            "mode": "fit"
-          },
-          "height": {
-            "mode": "fit"
-          },
-          "layout": "stack",
-          "direction": "row",
-          "gap": 8,
-          "align": "center",
-          "justify": "center",
-          "padding": {
-            "top": 12,
-            "right": 24,
-            "bottom": 12,
-            "left": 24
-          },
-          "fill": null,
-          "radius": 10,
-          "cursor": "pointer",
-          "border": {
-            "width": 1,
-            "color": "#FFFFFF",
-            "style": "solid"
-          }
-        }
-      },
-      "tag": "button",
-      "effects": {
-        "hover": {
-          "scale": 1.03,
-          "duration": 0.2
-        },
-        "pressScale": 0.97
-      }
-    },
-    "ifOhi36Be4": {
-      "id": "ifOhi36Be4",
-      "type": "text",
-      "name": "Label",
-      "parent": "mKC9xcrqSW",
-      "children": [],
-      "styles": {
-        "desktop": {
-          "width": {
-            "mode": "fit"
-          },
-          "height": {
-            "mode": "fit"
-          },
-          "fontFamily": "Inter",
-          "fontSize": 15,
-          "fontWeight": 600,
-          "lineHeight": 1.4,
-          "color": "#FFFFFF",
-          "textAlign": "left"
-        }
-      },
-      "text": "Book a Session",
-      "textTag": "p"
-    },
     "rsY5uaPsr1": {
       "id": "rsY5uaPsr1",
       "type": "frame",
       "name": "Navbar",
       "parent": "vYq4CgmHf-",
       "children": [
-        "swaB5IH5eH",
-        "6xzuyLPneF",
-        "dxxLGdOG0u"
+        "PjU6CmXt4M",
+        "mobileNavWrapper"
       ],
       "styles": {
         "desktop": {
           "width": {
-            "mode": "fill"
+            "mode": "fixed",
+            "value": 1000
           },
           "height": {
-            "mode": "fit"
+            "mode": "fixed",
+            "value": 1
           },
           "layout": "stack",
           "direction": "row",
@@ -404,20 +178,12 @@
           },
           "fill": {
             "type": "solid",
-            "color": "rgba(17,17,17,0.72)"
+            "color": "#d1d1d1"
           },
           "sticky": true,
           "stickyOffset": 0,
-          "positionAbsolute": true,
-          "pin": {
-            "top": 0,
-            "left": 0
-          },
           "zIndex": 100,
-          "border": {
-            "color": "rgba(255,255,255,0.16)",
-            "width": 1
-          },
+          "border": null,
           "shadows": [
             {
               "x": 0,
@@ -427,7 +193,50 @@
               "color": "rgba(0,0,0,0.22)"
             }
           ],
-          "backdropBlur": 18
+          "backdropBlur": 18,
+          "positionAbsolute": true,
+          "pin": {
+            "top": 12,
+            "centerX": true
+          },
+          "radius": 171
+        },
+        "tablet": {
+          "width": {
+            "mode": "relative",
+            "value": 94
+          },
+          "padding": {
+            "top": 18,
+            "right": 24,
+            "bottom": 18,
+            "left": 24
+          },
+          "pin": {
+            "top": 12,
+            "centerX": true
+          }
+        },
+        "phone": {
+          "width": {
+            "mode": "relative",
+            "value": 94
+          },
+          "height": {
+            "mode": "fixed",
+            "value": 56
+          },
+          "padding": {
+            "top": 0,
+            "right": 18,
+            "bottom": 0,
+            "left": 18
+          },
+          "pin": {
+            "top": 8,
+            "centerX": true
+          },
+          "radius": 40
         }
       },
       "tag": "nav"
@@ -436,7 +245,7 @@
       "id": "swaB5IH5eH",
       "type": "text",
       "name": "Logo",
-      "parent": "rsY5uaPsr1",
+      "parent": "PjU6CmXt4M",
       "children": [],
       "styles": {
         "desktop": {
@@ -450,18 +259,24 @@
           "fontSize": 20,
           "fontWeight": 700,
           "lineHeight": 1.4,
-          "color": "#FFFFFF",
+          "color": "#000000",
           "textAlign": "left"
+        },
+        "tablet": {
+          "fontSize": 19
+        },
+        "phone": {
+          "fontSize": 18
         }
       },
-      "text": "Brand",
+      "text": "Lumen",
       "textTag": "p"
     },
     "6xzuyLPneF": {
       "id": "6xzuyLPneF",
       "type": "frame",
       "name": "Nav Links",
-      "parent": "rsY5uaPsr1",
+      "parent": "PjU6CmXt4M",
       "children": [
         "s1Psa52A3O",
         "hL1ZvPWwqk",
@@ -488,7 +303,18 @@
             "left": 0
           },
           "fill": null,
-          "color": "#FFFFFF"
+          "color": "#FFFFFF",
+          "positionAbsolute": true,
+          "pin": {
+            "centerX": true,
+            "centerY": true
+          }
+        },
+        "tablet": {
+          "gap": 20
+        },
+        "phone": {
+          "visible": false
         }
       },
       "tag": "div"
@@ -511,7 +337,7 @@
           "fontSize": 14,
           "fontWeight": 500,
           "lineHeight": 1.4,
-          "color": "#444444",
+          "color": "#000000",
           "textAlign": "left",
           "cursor": "pointer"
         }
@@ -537,7 +363,7 @@
           "fontSize": 14,
           "fontWeight": 500,
           "lineHeight": 1.4,
-          "color": "#444444",
+          "color": "#000000",
           "textAlign": "left",
           "cursor": "pointer"
         }
@@ -563,7 +389,7 @@
           "fontSize": 14,
           "fontWeight": 500,
           "lineHeight": 1.4,
-          "color": "#444444",
+          "color": "#000000",
           "textAlign": "left",
           "cursor": "pointer"
         }
@@ -589,7 +415,7 @@
           "fontSize": 14,
           "fontWeight": 500,
           "lineHeight": 1.4,
-          "color": "#444444",
+          "color": "#000000",
           "textAlign": "left",
           "cursor": "pointer"
         }
@@ -601,7 +427,7 @@
       "id": "dxxLGdOG0u",
       "type": "frame",
       "name": "Button",
-      "parent": "rsY5uaPsr1",
+      "parent": "PjU6CmXt4M",
       "children": [
         "tiVCIcV5Pw"
       ],
@@ -611,11 +437,12 @@
             "mode": "fit"
           },
           "height": {
-            "mode": "fit"
+            "mode": "fixed",
+            "value": 32
           },
           "layout": "stack",
           "direction": "row",
-          "gap": 8,
+          "gap": 0,
           "align": "center",
           "justify": "center",
           "padding": {
@@ -628,9 +455,34 @@
             "type": "solid",
             "color": "#111111"
           },
-          "radius": 10,
+          "radius": 152,
           "cursor": "pointer",
           "color": "#FFFFFF"
+        },
+        "tablet": {
+          "height": {
+            "mode": "fixed",
+            "value": 32
+          },
+          "padding": {
+            "top": 10,
+            "right": 18,
+            "bottom": 10,
+            "left": 18
+          }
+        },
+        "phone": {
+          "visible": false,
+          "height": {
+            "mode": "fixed",
+            "value": 30
+          },
+          "padding": {
+            "top": 8,
+            "right": 14,
+            "bottom": 8,
+            "left": 14
+          }
         }
       },
       "tag": "button",
@@ -641,6 +493,71 @@
         },
         "pressScale": 0.97
       }
+    },
+    "mobileNavMenu": {
+      "id": "mobileNavMenu",
+      "type": "frame",
+      "name": "Mobile Menu",
+      "parent": "mobileNavWrapper",
+      "children": [],
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "fixed",
+            "value": 32
+          },
+          "height": {
+            "mode": "fixed",
+            "value": 32
+          },
+          "layout": "stack",
+          "direction": "column",
+          "gap": 5,
+          "align": "center",
+          "justify": "center",
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "fill": null,
+          "cursor": "pointer",
+          "overflow": "visible",
+          "visible": false
+        },
+        "tablet": {
+          "visible": false
+        },
+        "phone": {
+          "visible": true
+        }
+      },
+      "tag": "button",
+      "customCode": {
+        "html": "<span class=\"hamburger\" aria-hidden=\"true\"><span></span><span></span><span></span></span><span class=\"mobile-menu\"><span>Product</span><span>Features</span><span>Pricing</span><span>About</span></span>",
+        "css": ":host { position: relative; width: 32px; height: 32px; padding: 0; overflow: visible; background: transparent; border: 0; box-shadow: none; } .hamburger { display: flex; width: 22px; height: 16px; flex-direction: column; justify-content: space-between; } .hamburger span { display: block; width: 22px; height: 2px; border-radius: 2px; background: #000000; transition: transform 220ms ease, opacity 220ms ease; } .mobile-menu { position: absolute; z-index: 1000; display: flex; visibility: hidden; opacity: 0; transform: translateY(-10px); top: 48px; right: 0; width: 200px; padding: 10px; gap: 2px; flex-direction: column; border-radius: 16px; background: #D1D1D1; color: #000000; box-shadow: 0 16px 35px rgba(0,0,0,0.18); transition: opacity 220ms ease, transform 220ms ease, visibility 220ms ease; } .mobile-menu span { display: block; padding: 11px 12px; text-align: left; border-radius: 10px; } :host.open .mobile-menu { visibility: visible; opacity: 1; transform: translateY(0); } :host.open .hamburger span:nth-child(1) { transform: translateY(7px) rotate(45deg); } :host.open .hamburger span:nth-child(2) { opacity: 0; } :host.open .hamburger span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }",
+        "behaviorVersion": 1,
+        "behaviors": [
+          {
+            "id": "toggle-phone-menu",
+            "event": "click",
+            "target": ":host",
+            "once": false,
+            "actions": [
+              {
+                "type": "class",
+                "target": ":host",
+                "className": "open",
+                "operation": "toggle"
+              }
+            ]
+          }
+        ],
+        "note": "Reduces the expanded phone menu to a compact 200px dropdown aligned beneath the hamburger.",
+        "appliedAt": "2026-07-10T06:44:27.338Z"
+      },
+      "locked": true
     },
     "tiVCIcV5Pw": {
       "id": "tiVCIcV5Pw",
@@ -662,9 +579,15 @@
           "lineHeight": 1.4,
           "color": "#FFFFFF",
           "textAlign": "left"
+        },
+        "tablet": {
+          "fontSize": 14
+        },
+        "phone": {
+          "fontSize": 13
         }
       },
-      "text": "Sign Up",
+      "text": "Book A Session",
       "textTag": "p"
     },
     "fr2ahfaBMo": {
@@ -701,7 +624,8 @@
           }
         }
       },
-      "tag": "section"
+      "tag": "section",
+      "effects": {}
     },
     "ObJN0TfXua": {
       "id": "ObJN0TfXua",
@@ -2184,13 +2108,368 @@
       },
       "text": "Contact",
       "textTag": "p"
+    },
+    "PjU6CmXt4M": {
+      "id": "PjU6CmXt4M",
+      "type": "frame",
+      "name": "navwrapper",
+      "parent": "rsY5uaPsr1",
+      "children": [
+        "swaB5IH5eH",
+        "6xzuyLPneF",
+        "dxxLGdOG0u"
+      ],
+      "tag": "div",
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "relative",
+            "value": 100
+          },
+          "height": {
+            "mode": "relative",
+            "value": 100
+          },
+          "layout": "stack",
+          "direction": "row",
+          "gap": 12,
+          "align": "center",
+          "justify": "space-between",
+          "padding": {
+            "top": 0,
+            "right": 4,
+            "bottom": 3,
+            "left": 8
+          },
+          "x": 0,
+          "y": 0
+        },
+        "tablet": {
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        },
+        "phone": {
+          "visible": false,
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          }
+        }
+      }
+    },
+    "mobileNavWrapper": {
+      "id": "mobileNavWrapper",
+      "type": "frame",
+      "name": "Mobile Navbar",
+      "parent": "rsY5uaPsr1",
+      "children": [
+        "mobileNavLogo",
+        "mobileNavMenu"
+      ],
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "relative",
+            "value": 100
+          },
+          "height": {
+            "mode": "relative",
+            "value": 100
+          },
+          "layout": "stack",
+          "direction": "row",
+          "gap": 12,
+          "align": "center",
+          "justify": "space-between",
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "visible": false
+        },
+        "tablet": {
+          "visible": false
+        },
+        "phone": {
+          "visible": true
+        }
+      },
+      "tag": "div"
+    },
+    "mobileNavLogo": {
+      "id": "mobileNavLogo",
+      "type": "text",
+      "name": "Mobile Logo",
+      "parent": "mobileNavWrapper",
+      "children": [],
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "fit"
+          },
+          "height": {
+            "mode": "fit"
+          },
+          "fontFamily": "Inter",
+          "fontSize": 18,
+          "fontWeight": 700,
+          "lineHeight": 1.4,
+          "color": "#000000",
+          "textAlign": "left"
+        }
+      },
+      "text": "Lumen",
+      "textTag": "p"
+    },
+    "NeXF24QBHu": {
+      "id": "NeXF24QBHu",
+      "type": "frame",
+      "name": "imageWrapper",
+      "parent": "6CNNRN8lVI",
+      "children": [
+        "X00AqH67e5",
+        "-p-5Q17-yW",
+        "ezRDANUpKo",
+        "hT7A4nzYlt",
+        "6TXUqC0kqY"
+      ],
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "fixed",
+            "value": 513
+          },
+          "height": {
+            "mode": "fixed",
+            "value": 124
+          },
+          "layout": "stack",
+          "fill": null,
+          "overflow": "visible",
+          "positionAbsolute": true,
+          "pin": {
+            "centerX": true,
+            "bottom": 0
+          },
+          "direction": "row",
+          "justify": "center",
+          "align": "center",
+          "x": 230,
+          "y": 349
+        },
+        "tablet": {
+          "pin": {
+            "centerX": true,
+            "bottom": 0
+          }
+        }
+      },
+      "tag": "div"
+    },
+    "X00AqH67e5": {
+      "id": "X00AqH67e5",
+      "type": "image",
+      "name": "Image copy copy",
+      "parent": "NeXF24QBHu",
+      "children": [],
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "fixed",
+            "value": 228
+          },
+          "height": {
+            "mode": "fixed",
+            "value": 319
+          },
+          "radius": 11,
+          "x": 192,
+          "y": -162,
+          "zIndex": 3,
+          "transformOriginX": 50,
+          "scaleX": 1
+        }
+      },
+      "src": "/project-assets/photography/akshay-madivanan-zachggmtx-w-unsplash-1.jpg",
+      "alt": "",
+      "objectFit": "cover"
+    },
+    "-p-5Q17-yW": {
+      "id": "-p-5Q17-yW",
+      "type": "image",
+      "name": "Image copy copy copy",
+      "parent": "NeXF24QBHu",
+      "children": [],
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "fixed",
+            "value": 228
+          },
+          "height": {
+            "mode": "fixed",
+            "value": 319
+          },
+          "radius": 11,
+          "x": 208,
+          "y": -146,
+          "zIndex": 3,
+          "transformOriginX": 50,
+          "scaleX": 1
+        }
+      },
+      "src": "/project-assets/photography/akshay-madivanan-zachggmtx-w-unsplash-1.jpg",
+      "alt": "",
+      "objectFit": "cover"
+    },
+    "ezRDANUpKo": {
+      "id": "ezRDANUpKo",
+      "type": "image",
+      "name": "Image copy copy copy copy",
+      "parent": "NeXF24QBHu",
+      "children": [],
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "fixed",
+            "value": 228
+          },
+          "height": {
+            "mode": "fixed",
+            "value": 319
+          },
+          "radius": 11,
+          "x": 224,
+          "y": -130,
+          "zIndex": 3,
+          "transformOriginX": 50,
+          "scaleX": 1
+        }
+      },
+      "src": "/project-assets/photography/akshay-madivanan-zachggmtx-w-unsplash-1.jpg",
+      "alt": "",
+      "objectFit": "cover"
+    },
+    "hT7A4nzYlt": {
+      "id": "hT7A4nzYlt",
+      "type": "image",
+      "name": "Image copy copy copy copy copy",
+      "parent": "NeXF24QBHu",
+      "children": [],
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "fixed",
+            "value": 228
+          },
+          "height": {
+            "mode": "fixed",
+            "value": 319
+          },
+          "radius": 11,
+          "x": 240,
+          "y": -114,
+          "zIndex": 3,
+          "transformOriginX": 50,
+          "scaleX": 1
+        }
+      },
+      "src": "/project-assets/photography/akshay-madivanan-zachggmtx-w-unsplash-1.jpg",
+      "alt": "",
+      "objectFit": "cover"
+    },
+    "6TXUqC0kqY": {
+      "id": "6TXUqC0kqY",
+      "type": "image",
+      "name": "Image copy copy copy copy copy copy",
+      "parent": "NeXF24QBHu",
+      "children": [],
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "fixed",
+            "value": 228
+          },
+          "height": {
+            "mode": "fixed",
+            "value": 319
+          },
+          "radius": 11,
+          "x": 256,
+          "y": -98,
+          "zIndex": 3,
+          "transformOriginX": 50,
+          "scaleX": 1
+        }
+      },
+      "src": "/project-assets/photography/akshay-madivanan-zachggmtx-w-unsplash-1.jpg",
+      "alt": "",
+      "objectFit": "cover"
+    },
+    "6CNNRN8lVI": {
+      "id": "6CNNRN8lVI",
+      "type": "frame",
+      "name": "Hero Wrapper",
+      "parent": "2wQKQN-fW3",
+      "children": [
+        "NeXF24QBHu",
+        "6MbH9sCCKR"
+      ],
+      "styles": {
+        "desktop": {
+          "width": {
+            "mode": "fixed",
+            "value": 1000
+          },
+          "height": {
+            "mode": "fixed",
+            "value": 553
+          },
+          "layout": "stack",
+          "fill": {
+            "type": "solid",
+            "color": "#F0F0F0"
+          },
+          "overflow": "hidden",
+          "positionAbsolute": true,
+          "pin": {
+            "centerX": true,
+            "top": 12
+          },
+          "padding": {
+            "top": 0,
+            "right": 0,
+            "bottom": 0,
+            "left": 0
+          },
+          "radius": 20,
+          "justify": "center",
+          "align": "center",
+          "direction": "column"
+        }
+      },
+      "tag": "div"
     }
   },
   "components": [],
   "cms": {
     "collections": []
   },
-  "assets": [],
+  "assets": [
+    {
+      "id": "iLj53Vvx3H",
+      "name": "akshay-madivanan-ZAchgGMTX_w-unsplash (1).jpg",
+      "file": "akshay-madivanan-zachggmtx-w-unsplash-1.jpg"
+    }
+  ],
   "colorStyles": [
     {
       "id": "1AvVAGoerc",
@@ -2214,7 +2493,7 @@
       "id": "MNlpjd6y5w",
       "name": "Hero",
       "pageId": "0dGhDaecW5",
-      "duration": 1150,
+      "duration": 700,
       "trigger": "load",
       "appearViewport": 20,
       "loop": false,
@@ -2252,120 +2531,6 @@
             {
               "id": "S9dZc2MXcD",
               "time": 700,
-              "value": 1,
-              "easing": "ease-out"
-            }
-          ]
-        },
-        {
-          "id": "_NsRMZpk8t",
-          "nodeId": "guKeaqQHLY",
-          "property": "y",
-          "keyframes": [
-            {
-              "id": "sYI4Q4o7hm",
-              "time": 150,
-              "value": 40,
-              "easing": "ease-out"
-            },
-            {
-              "id": "fiSUE35HEP",
-              "time": 850,
-              "value": 0,
-              "easing": "ease-out"
-            }
-          ]
-        },
-        {
-          "id": "jG_XGZQpmd",
-          "nodeId": "guKeaqQHLY",
-          "property": "opacity",
-          "keyframes": [
-            {
-              "id": "I21OCkvgzG",
-              "time": 150,
-              "value": 0,
-              "easing": "ease-out"
-            },
-            {
-              "id": "a3CZD-trGE",
-              "time": 850,
-              "value": 1,
-              "easing": "ease-out"
-            }
-          ]
-        },
-        {
-          "id": "MKAuIeNEU4",
-          "nodeId": "NkCLrLAzRQ",
-          "property": "y",
-          "keyframes": [
-            {
-              "id": "QPGzqoAM47",
-              "time": 300,
-              "value": 40,
-              "easing": "ease-out"
-            },
-            {
-              "id": "m4MUrK6rBk",
-              "time": 1000,
-              "value": 0,
-              "easing": "ease-out"
-            }
-          ]
-        },
-        {
-          "id": "fr_07m8tsf",
-          "nodeId": "NkCLrLAzRQ",
-          "property": "opacity",
-          "keyframes": [
-            {
-              "id": "vyfXBr__D9",
-              "time": 300,
-              "value": 0,
-              "easing": "ease-out"
-            },
-            {
-              "id": "FmSZM8ach_",
-              "time": 1000,
-              "value": 1,
-              "easing": "ease-out"
-            }
-          ]
-        },
-        {
-          "id": "viewPortfolioY",
-          "nodeId": "Gpb2c6EJ7n",
-          "property": "y",
-          "keyframes": [
-            {
-              "id": "viewPortfolioYStart",
-              "time": 450,
-              "value": 40,
-              "easing": "ease-out"
-            },
-            {
-              "id": "viewPortfolioYEnd",
-              "time": 1150,
-              "value": 0,
-              "easing": "ease-out"
-            }
-          ]
-        },
-        {
-          "id": "viewPortfolioOpacity",
-          "nodeId": "Gpb2c6EJ7n",
-          "property": "opacity",
-          "keyframes": [
-            {
-              "id": "viewPortfolioOpacityStart",
-              "time": 450,
-              "value": 0,
-              "easing": "ease-out"
-            },
-            {
-              "id": "viewPortfolioOpacityEnd",
-              "time": 1150,
               "value": 1,
               "easing": "ease-out"
             }
@@ -2627,7 +2792,7 @@
       "id": "Ybbeux7EsQ",
       "name": "Hero blur reveal",
       "pageId": "0dGhDaecW5",
-      "duration": 1040,
+      "duration": 800,
       "trigger": "appear",
       "appearViewport": 10,
       "loop": false,
@@ -2684,120 +2849,6 @@
             {
               "id": "-cwlQ3GZXr",
               "time": 800,
-              "value": 1,
-              "easing": "ease-out"
-            }
-          ]
-        },
-        {
-          "id": "UCx5fZ_dDL",
-          "nodeId": "guKeaqQHLY",
-          "property": "y",
-          "keyframes": [
-            {
-              "id": "0o0U8Arhp2",
-              "time": 120,
-              "value": 42,
-              "easing": "ease-out"
-            },
-            {
-              "id": "QYY2FkysUD",
-              "time": 920,
-              "value": 0,
-              "easing": "ease-out"
-            }
-          ]
-        },
-        {
-          "id": "m1J5NPKOsT",
-          "nodeId": "guKeaqQHLY",
-          "property": "blur",
-          "keyframes": [
-            {
-              "id": "YfZK6_Nia2",
-              "time": 120,
-              "value": 14,
-              "easing": "ease-out"
-            },
-            {
-              "id": "WDqja2J2sR",
-              "time": 920,
-              "value": 0,
-              "easing": "ease-out"
-            }
-          ]
-        },
-        {
-          "id": "E01Bn_xlFe",
-          "nodeId": "guKeaqQHLY",
-          "property": "opacity",
-          "keyframes": [
-            {
-              "id": "p6_gBHzs9T",
-              "time": 120,
-              "value": 0,
-              "easing": "ease-out"
-            },
-            {
-              "id": "6rQqSmOnEC",
-              "time": 920,
-              "value": 1,
-              "easing": "ease-out"
-            }
-          ]
-        },
-        {
-          "id": "D8hswhy-wZ",
-          "nodeId": "NkCLrLAzRQ",
-          "property": "y",
-          "keyframes": [
-            {
-              "id": "aiWGUJnU-E",
-              "time": 240,
-              "value": 42,
-              "easing": "ease-out"
-            },
-            {
-              "id": "jLzEXaSn6H",
-              "time": 1040,
-              "value": 0,
-              "easing": "ease-out"
-            }
-          ]
-        },
-        {
-          "id": "xlv518EdZF",
-          "nodeId": "NkCLrLAzRQ",
-          "property": "blur",
-          "keyframes": [
-            {
-              "id": "xHKNUZFMgw",
-              "time": 240,
-              "value": 14,
-              "easing": "ease-out"
-            },
-            {
-              "id": "lSz-jE7WEJ",
-              "time": 1040,
-              "value": 0,
-              "easing": "ease-out"
-            }
-          ]
-        },
-        {
-          "id": "lT1v4IlMSC",
-          "nodeId": "NkCLrLAzRQ",
-          "property": "opacity",
-          "keyframes": [
-            {
-              "id": "jOxHWppxS3",
-              "time": 240,
-              "value": 0,
-              "easing": "ease-out"
-            },
-            {
-              "id": "G4M9W7E2vo",
-              "time": 1040,
               "value": 1,
               "easing": "ease-out"
             }

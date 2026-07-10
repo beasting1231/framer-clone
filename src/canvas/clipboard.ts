@@ -1,4 +1,4 @@
-import { cloneSubtree } from "@/model/resolve";
+import { cloneSubtree, resolveComponentVariant } from "@/model/resolve";
 import { uid } from "@/model/factory";
 import type { Node } from "@/model/types";
 import { docActions, useDocument } from "@/store/document";
@@ -44,7 +44,10 @@ export function pasteClipboard() {
   if (!parentId) {
     const ctx = s.context;
     if (ctx?.kind === "page") parentId = project.pages.find((p) => p.id === ctx.pageId)?.rootId ?? null;
-    else if (ctx?.kind === "component") parentId = project.components.find((c) => c.id === ctx.componentId)?.rootId ?? null;
+    else if (ctx?.kind === "component") {
+      const component = project.components.find((c) => c.id === ctx.componentId);
+      parentId = component ? resolveComponentVariant(component, s.breakpoint).rootId : null;
+    }
   }
   if (!parentId) return;
 

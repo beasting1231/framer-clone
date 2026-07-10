@@ -1,209 +1,110 @@
 import { motion } from "framer-motion";
+import { CustomCodeRuntime } from "../CustomCodeRuntime";
 
 export default function Home() {
   return (
     <main className="home-vYq4">
       <motion.nav
         className="navbar-rsY5"
-        initial={{ top: -40, opacity: 0 }}
-        whileInView={{ top: [-40, 0], opacity: [0, 1] }}
+        initial={{ marginTop: -40, opacity: 0 }}
+        whileInView={{ marginTop: [-40, 0], opacity: [0, 1] }}
         viewport={{ once: true, amount: "some", pctFromBottom: 0, margin: "0px 0px -0% 0px" }}
         transition={{
-          top: { type: "tween", duration: 0.65, times: [0, 1], ease: [[0, 0, 0.58, 1]] },
+          marginTop: { type: "tween", duration: 0.65, times: [0, 1], ease: [[0, 0, 0.58, 1]] },
           opacity: { type: "tween", duration: 0.65, times: [0, 1], ease: [[0, 0, 0.58, 1]] },
         }}
       >
-        <p className="logo-swaB">Brand</p>
-        <div className="nav-links-6xzu">
-          <p className="product-s1Ps">Product</p>
-          <p className="features-hL1Z">Features</p>
-          <p className="pricing-zw_J">Pricing</p>
-          <p className="about-70VZ">About</p>
-        </div>
-        <motion.button
-          className="button-dxxL"
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
-        >
-          <p className="label-tiVC">Sign Up</p>
-        </motion.button>
-      </motion.nav>
-      <section className="hero-2wQK">
-        <motion.h1
-          className="heading-6MbH"
-          initial={{ top: 42, filter: "blur(14px)", opacity: 0 }}
-          animate={{ top: [40, 0, 0], opacity: [0, 1, 1] }}
-          whileInView={{
-            top: [42, 0, 0],
-            filter: ["blur(14px)", "blur(0px)", "blur(0px)"],
-            opacity: [0, 1, 1],
-          }}
-          viewport={{ once: true, amount: "some", pctFromBottom: 10, margin: "0px 0px -10% 0px" }}
-          transition={{
-            top: {
-              type: "tween",
-              duration: 1.04,
-              times: [0, 0.7692307692307693, 1],
-              ease: [
-                [0, 0, 0.58, 1],
-                [0, 0, 1, 1],
-              ],
-            },
-            filter: {
-              type: "tween",
-              duration: 1.04,
-              times: [0, 0.7692307692307693, 1],
-              ease: [
-                [0, 0, 0.58, 1],
-                [0, 0, 1, 1],
-              ],
-            },
-            opacity: {
-              type: "tween",
-              duration: 1.04,
-              times: [0, 0.7692307692307693, 1],
-              ease: [
-                [0, 0, 0.58, 1],
-                [0, 0, 1, 1],
-              ],
-            },
-          }}
-        >
-          Capture the moments that matter
-        </motion.h1>
-        <motion.p
-          className="subheading-guKe"
-          initial={{ top: 42, filter: "blur(14px)", opacity: 0 }}
-          animate={{ top: [40, 40, 0, 0], opacity: [0, 0, 1, 1] }}
-          whileInView={{
-            top: [42, 42, 0, 0],
-            filter: ["blur(14px)", "blur(14px)", "blur(0px)", "blur(0px)"],
-            opacity: [0, 0, 1, 1],
-          }}
-          viewport={{ once: true, amount: "some", pctFromBottom: 10, margin: "0px 0px -10% 0px" }}
-          transition={{
-            top: {
-              type: "tween",
-              duration: 1.04,
-              times: [0, 0.11538461538461539, 0.8846153846153846, 1],
-              ease: [
-                [0, 0, 1, 1],
-                [0, 0, 0.58, 1],
-                [0, 0, 1, 1],
-              ],
-            },
-            filter: {
-              type: "tween",
-              duration: 1.04,
-              times: [0, 0.11538461538461539, 0.8846153846153846, 1],
-              ease: [
-                [0, 0, 1, 1],
-                [0, 0, 0.58, 1],
-                [0, 0, 1, 1],
-              ],
-            },
-            opacity: {
-              type: "tween",
-              duration: 1.04,
-              times: [0, 0.11538461538461539, 0.8846153846153846, 1],
-              ease: [
-                [0, 0, 1, 1],
-                [0, 0, 0.58, 1],
-                [0, 0, 1, 1],
-              ],
-            },
-          }}
-        >
-          Elegant photography for portraits, weddings, and stories worth preserving.
-        </motion.p>
-        <motion.div
-          className="buttons-NkCL"
-          initial={{ top: 42, filter: "blur(14px)", opacity: 0 }}
-          animate={{ top: [40, 40, 0, 0], opacity: [0, 0, 1, 1] }}
-          whileInView={{
-            top: [42, 42, 0],
-            filter: ["blur(14px)", "blur(14px)", "blur(0px)"],
-            opacity: [0, 0, 1],
-          }}
-          viewport={{ once: true, amount: "some", pctFromBottom: 10, margin: "0px 0px -10% 0px" }}
-          transition={{
-            top: {
-              type: "tween",
-              duration: 1.04,
-              times: [0, 0.23076923076923078, 1],
-              ease: [
-                [0, 0, 1, 1],
-                [0, 0, 0.58, 1],
-              ],
-            },
-            filter: {
-              type: "tween",
-              duration: 1.04,
-              times: [0, 0.23076923076923078, 1],
-              ease: [
-                [0, 0, 1, 1],
-                [0, 0, 0.58, 1],
-              ],
-            },
-            opacity: {
-              type: "tween",
-              duration: 1.04,
-              times: [0, 0.23076923076923078, 1],
-              ease: [
-                [0, 0, 1, 1],
-                [0, 0, 0.58, 1],
-              ],
-            },
-          }}
-        >
+        <div className="navwrapper-PjU6">
+          <p className="logo-swaB">Lumen</p>
+          <div className="nav-links-6xzu">
+            <p className="product-s1Ps">Product</p>
+            <p className="features-hL1Z">Features</p>
+            <p className="pricing-zw_J">Pricing</p>
+            <p className="about-70VZ">About</p>
+          </div>
           <motion.button
-            className="button-mKC9"
+            className="button-dxxL"
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
           >
-            <p className="label-ifOh">Book a Session</p>
+            <p className="label-tiVC">Book A Session</p>
           </motion.button>
-        </motion.div>
-        <motion.button
-          className="button-Gpb2"
-          data-custom-code-node="Gpb2c6EJ7n"
-          whileHover={{ scale: 1.03 }}
-          whileTap={{ scale: 0.97 }}
-          initial={{ top: 40, opacity: 0 }}
-          animate={{ top: [40, 40, 0], opacity: [0, 0, 1] }}
-          transition={{
-            top: {
-              type: "tween",
-              duration: 1.15,
-              times: [0, 0.391304347826087, 1],
-              ease: [
-                [0, 0, 1, 1],
-                [0, 0, 0.58, 1],
-              ],
-            },
-            opacity: {
-              type: "tween",
-              duration: 1.15,
-              times: [0, 0.391304347826087, 1],
-              ease: [
-                [0, 0, 1, 1],
-                [0, 0, 0.58, 1],
-              ],
-            },
-          }}
-        >
-          <style
-            dangerouslySetInnerHTML={{
-              __html:
-                '[data-custom-code-node="Gpb2c6EJ7n"] { position: relative; overflow: hidden; } [data-custom-code-node="Gpb2c6EJ7n"] .shimmer-label { position: relative; z-index: 1; } [data-custom-code-node="Gpb2c6EJ7n"]::before { content: ""; position: absolute; top: 0; bottom: 0; left: -75%; width: 50%; background: linear-gradient(120deg, transparent, rgba(255,255,255,0.45), transparent); transform: skewX(-20deg); pointer-events: none; transition: none; } [data-custom-code-node="Gpb2c6EJ7n"]:hover::before { left: 125%; transition: left 700ms ease-out; }',
-            }}
+        </div>
+        <div className="mobile-navbar-mobi">
+          <p className="mobile-logo-mobi">Lumen</p>
+          <CustomCodeRuntime
+            className="mobile-menu-mobi"
+            nodeId={"mobileNavMenu"}
+            html={
+              '<span class="hamburger" aria-hidden="true"><span></span><span></span><span></span></span><span class="mobile-menu"><span>Product</span><span>Features</span><span>Pricing</span><span>About</span></span>'
+            }
+            css={
+              '[data-custom-code-node="mobileNavMenu"] { position: relative; width: 32px; height: 32px; padding: 0; overflow: visible; background: transparent; border: 0; box-shadow: none; } [data-custom-code-node="mobileNavMenu"] .hamburger { display: flex; width: 22px; height: 16px; flex-direction: column; justify-content: space-between; } [data-custom-code-node="mobileNavMenu"] .hamburger span { display: block; width: 22px; height: 2px; border-radius: 2px; background: #000000; transition: transform 220ms ease, opacity 220ms ease; } [data-custom-code-node="mobileNavMenu"] .mobile-menu { position: absolute; z-index: 1000; display: flex; visibility: hidden; opacity: 0; transform: translateY(-10px); top: 48px; right: 0; width: 200px; padding: 10px; gap: 2px; flex-direction: column; border-radius: 16px; background: #D1D1D1; color: #000000; box-shadow: 0 16px 35px rgba(0,0,0,0.18); transition: opacity 220ms ease, transform 220ms ease, visibility 220ms ease; } [data-custom-code-node="mobileNavMenu"] .mobile-menu span { display: block; padding: 11px 12px; text-align: left; border-radius: 10px; } [data-custom-code-node="mobileNavMenu"].open .mobile-menu { visibility: visible; opacity: 1; transform: translateY(0); } [data-custom-code-node="mobileNavMenu"].open .hamburger span:nth-child(1) { transform: translateY(7px) rotate(45deg); } [data-custom-code-node="mobileNavMenu"].open .hamburger span:nth-child(2) { opacity: 0; } [data-custom-code-node="mobileNavMenu"].open .hamburger span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }'
+            }
+            behaviors={[
+              {
+                id: "toggle-phone-menu",
+                event: "click",
+                target: ":host",
+                once: false,
+                actions: [
+                  { type: "class", target: ":host", className: "open", operation: "toggle" },
+                ],
+              },
+            ]}
+            animated={false}
           />
-          <div
-            dangerouslySetInnerHTML={{
-              __html: '<span class="shimmer-label">View Portfolio</span>',
+        </div>
+      </motion.nav>
+      <section className="hero-2wQK">
+        <div className="hero-wrapper-6CNN">
+          <div className="imagewrapper-NeXF">
+            <img
+              className="image-copy-copy-X00A"
+              src="/assets/akshay-madivanan-zachggmtx-w-unsplash-1.jpg"
+              alt=""
+              style={{ objectFit: "cover" }}
+            />
+            <img
+              className="image-copy-copy-copy--p-5"
+              src="/assets/akshay-madivanan-zachggmtx-w-unsplash-1.jpg"
+              alt=""
+              style={{ objectFit: "cover" }}
+            />
+            <img
+              className="image-copy-copy-copy-copy-ezRD"
+              src="/assets/akshay-madivanan-zachggmtx-w-unsplash-1.jpg"
+              alt=""
+              style={{ objectFit: "cover" }}
+            />
+            <img
+              className="image-copy-copy-copy-copy-copy-hT7A"
+              src="/assets/akshay-madivanan-zachggmtx-w-unsplash-1.jpg"
+              alt=""
+              style={{ objectFit: "cover" }}
+            />
+            <img
+              className="image-copy-copy-copy-copy-copy-copy-6TXU"
+              src="/assets/akshay-madivanan-zachggmtx-w-unsplash-1.jpg"
+              alt=""
+              style={{ objectFit: "cover" }}
+            />
+          </div>
+          <motion.h1
+            className="header-6MbH"
+            initial={{ top: 42, filter: "blur(14px)", opacity: 0 }}
+            animate={{ top: [40, 0], opacity: [0, 1] }}
+            whileInView={{ top: [42, 0], filter: ["blur(14px)", "blur(0px)"], opacity: [0, 1] }}
+            viewport={{ once: true, amount: "some", pctFromBottom: 10, margin: "0px 0px -10% 0px" }}
+            transition={{
+              top: { type: "tween", duration: 0.8, times: [0, 1], ease: [[0, 0, 0.58, 1]] },
+              filter: { type: "tween", duration: 0.8, times: [0, 1], ease: [[0, 0, 0.58, 1]] },
+              opacity: { type: "tween", duration: 0.8, times: [0, 1], ease: [[0, 0, 0.58, 1]] },
             }}
-          />
-        </motion.button>
+          >
+            Lumen Studio
+          </motion.h1>
+        </div>
       </section>
       <motion.section
         className="pricing-fr2a"

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BREAKPOINTS, type BreakpointId, type Node } from "@/model/types";
-import { nodeStyles, ancestorChain } from "@/model/resolve";
+import { nodeStyles, ancestorChain, componentVariants, resolveComponentVariant } from "@/model/resolve";
 import { createFrame, createStack, createText, createImage, px } from "@/model/factory";
 import { docActions, useDocument } from "@/store/document";
 import { useTimeline } from "@/store/timeline";
@@ -79,7 +79,8 @@ export function Canvas() {
   // ── resolve what we're editing
   const page = context?.kind === "page" ? project?.pages.find((p) => p.id === context.pageId) : null;
   const component = context?.kind === "component" ? project?.components.find((c) => c.id === context.componentId) : null;
-  const rootId = page?.rootId ?? component?.rootId ?? null;
+  const componentVariant = component ? resolveComponentVariant(component, breakpoint) : null;
+  const rootId = page?.rootId ?? componentVariant?.rootId ?? null;
 
   // ── space key panning
   useEffect(() => {
@@ -819,7 +820,7 @@ export function Canvas() {
   if (!project || !rootId) return <div className="canvas-viewport" ref={viewportRef} />;
 
   const artboards: { bp: BreakpointId; width: number; x: number }[] = component
-    ? [{ bp: breakpoint, width: 600, x: 0 }]
+    ? [{ bp: breakpoint, width: BREAKPOINTS.find((def) => def.id === breakpoint)?.width ?? 600, x: 0 }]
     : BREAKPOINTS.map((def) => ({ bp: def.id, width: def.width, x: artboardX(def.id) }));
 
   const cursorClass = tool === "hand" ? "hand" : tool !== "select" ? "placing" : "";
@@ -838,8 +839,8 @@ export function Canvas() {
       onMouseLeave={() => useEditor.getState().setHovered(null)}
     >
       <div className="canvas-world" style={{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})` }}>
-        {component && (
-          <div style={{ position: "absolute", left: 0, top: -60, color: "var(--component)", fontSize: 13 / zoom, whiteSpace: "nowrap", display: "flex", gap: 12, alignItems: "center" }}>
+        {component && componentVariant && (
+          <div style={{ position: "absolute", left: 0, top: -72, color: "var(--component)", fontSize: 13 / zoom, whiteSpace: "nowrap", display: "flex", gap: 10 / zoom, alignItems: "center" }}>
             <button
               className="btn"
               style={{ fontSize: 12 / zoom, height: 30 / zoom, padding: `0 ${12 / zoom}px` }}
@@ -851,22 +852,55 @@ export function Canvas() {
             >
               ← Back
             </button>
-            Editing component: {component.name}
+            <span>
+              Editing component: {component.name} · {BREAKPOINTS.find((def) => def.id === breakpoint)?.label}
+            </span>
+            <select
+              className="prop-select"
+              value={componentVariant.id}
+              title={`Variant used at ${breakpoint}`}
+              style={{ width: 130 / zoom, height: 30 / zoom, fontSize: 12 / zoom }}
+              onMouseDown={(e) => e.stopPropagation()}
+              onChange={(e) => {
+                const variant = componentVariants(component).find((item) => item.id === e.target.value);
+                docActions.assignComponentVariant(component.id, breakpoint, e.target.value);
+                if (variant) useEditor.getState().select([variant.rootId]);
+              }}
+            >
+              {componentVariants(component).map((variant) => (
+                <option key={variant.id} value={variant.id}>{variant.name}</option>
+              ))}
+            </select>
+            {!component.variantByBreakpoint?.[breakpoint] && breakpoint !== "desktop" && (
+              <button
+                className="btn"
+                style={{ fontSize: 12 / zoom, height: 30 / zoom, padding: `0 ${12 / zoom}px` }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() => {
+                  const created = docActions.addComponentVariant(component.id, breakpoint);
+                  if (created) useEditor.getState().select([created.rootId]);
+                }}
+              >
+                Create {breakpoint === "phone" ? "Phone" : "Tablet"} state
+              </button>
+            )}
           </div>
         )}
         {artboards.map(({ bp, width, x }) => (
           <div key={bp} data-artboard={bp} className="artboard" style={{ left: x, top: 0, width, minHeight: 400 }}>
-            <div
-              className={`artboard-label ${bp === breakpoint ? "active" : ""}`}
-              style={{ fontSize: Math.min(22, 11 / zoom), top: -Math.min(44, 24 / zoom) }}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                useEditor.getState().setBreakpoint(bp);
-                useEditor.getState().select([rootId]);
-              }}
-            >
-              {component ? component.name : `${page?.name ?? ""} · ${BREAKPOINTS.find((b) => b.id === bp)?.label}`}
-            </div>
+            {!component && (
+              <div
+                className={`artboard-label ${bp === breakpoint ? "active" : ""}`}
+                style={{ fontSize: Math.min(22, 11 / zoom), top: -Math.min(44, 24 / zoom) }}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  useEditor.getState().setBreakpoint(bp);
+                  useEditor.getState().select([rootId]);
+                }}
+              >
+                {`${page?.name ?? ""} · ${BREAKPOINTS.find((b) => b.id === bp)?.label}`}
+              </div>
+            )}
             <ArtboardContent rootId={rootId} breakpoint={bp} />
           </div>
         ))}

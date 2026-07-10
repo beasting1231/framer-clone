@@ -257,3 +257,21 @@ export const IconCheck = (p: SVGProps<SVGSVGElement>) => (
     <path d="M2.5 8.5l3.5 3.5 7.5-8" />
   </svg>
 );
+
+export const IconArrowUp = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M8 13V3M3.75 7.25L8 3l4.25 4.25" />
+  </svg>
+);
+
+export const IconPencil = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <path d="M3 13l.65-3.1L10.8 2.75a1.55 1.55 0 012.2 2.2L5.85 12.1 3 13zM9.75 3.8l2.2 2.2" />
+  </svg>
+);
+
+export const IconStop = (p: SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 16 16" fill="currentColor" {...p}>
+    <rect x="5" y="5" width="6" height="6" rx="1" />
+  </svg>
+);

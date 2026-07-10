@@ -72,6 +72,15 @@ function useKeyboardShortcuts() {
       }
 
       // ── grouping / components
+      if (mod && !e.shiftKey && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        if (s.selection.length < 2) return;
+        const parentIds = new Set(s.selection.map((id) => project.nodes[id]?.parent).filter(Boolean));
+        if (parentIds.size !== 1) return;
+        const id = docActions.wrapInStack(s.selection);
+        if (id) s.select([id]);
+        return;
+      }
       if (mod && e.key === "Enter") {
         e.preventDefault();
         const id = docActions.wrapInStack(s.selection);

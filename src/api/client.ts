@@ -9,6 +9,13 @@ export interface ProjectListItem extends ProjectMeta {
 export interface CodexMessage {
   role: "user" | "assistant";
   text: string;
+  images?: CodexImageAttachment[];
+}
+
+export interface CodexImageAttachment {
+  id: string;
+  name: string;
+  dataUrl: string;
 }
 
 export interface CodexProgress {
@@ -115,7 +122,7 @@ export const api = {
   codexStartSession: (projectId: string) =>
     request<{ ok: boolean; mode: string; startedAt: number; threadId?: string }>(`/api/codex/projects/${projectId}/start-session`, { method: "POST" }),
 
-  codexSend: (projectId: string, body: { prompt: string; conversation?: CodexMessage[]; selection?: string[]; model?: string; reasoning?: string; speed?: string; projectHash?: string; currentPageId?: string; breakpoint?: BreakpointId }) =>
+  codexSend: (projectId: string, body: { prompt: string; images?: CodexImageAttachment[]; conversation?: CodexMessage[]; selection?: string[]; model?: string; reasoning?: string; speed?: string; projectHash?: string; currentPageId?: string; breakpoint?: BreakpointId }) =>
     request<CodexSendResult>(`/api/codex/projects/${projectId}/send`, { method: "POST", body: JSON.stringify(body) }),
 
   codexApplyCustomCode: (projectId: string, body: { proposal: CustomCodeProposal; projectHash?: string }) =>

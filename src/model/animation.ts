@@ -1,7 +1,7 @@
 import type { AnimEasing, AnimProperty, AnimTrack, AnimationClip, EntranceEffect, Node, SerializedProject } from "./types";
 import { ANIM_PROPERTIES } from "./types";
 import type { CSSProperties } from "react";
-import { walkTree } from "./resolve";
+import { resolveStyles, walkTree } from "./resolve";
 import { uid } from "./factory";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -80,6 +80,20 @@ export function clipTimelineExtent(clip: AnimationClip): number {
 /** Keep stored duration in sync with keyframes (for serialization). */
 export function syncClipDuration(clip: AnimationClip): void {
   clip.duration = clipDuration(clip);
+}
+
+/** Drop tracks whose target layer no longer exists and resync clip durations. */
+export function pruneMissingAnimationTracks(project: Pick<SerializedProject, "nodes" | "animations">): number {
+  let removed = 0;
+  for (const clip of project.animations ?? []) {
+    const tracks = clip.tracks.filter((track) => Boolean(project.nodes[track.nodeId]));
+    removed += clip.tracks.length - tracks.length;
+    if (tracks.length !== clip.tracks.length) {
+      clip.tracks = tracks;
+      syncClipDuration(clip);
+    }
+  }
+  return removed;
 }
 
 export type TrackTargetIssue = "missing" | "duplicate";
@@ -177,9 +191,19 @@ export interface SampledValues {
   blur?: number;
 }
 
+/** Pinned/sticky layers keep layout coordinates; timeline X/Y become additive offsets. */
+export function usesPinnedAnimationOffsets(node: Node): boolean {
+  return (["desktop", "tablet", "phone"] as const).some((breakpoint) => {
+    const styles = resolveStyles(node.styles, breakpoint);
+    return Boolean(styles.sticky || (styles.positionAbsolute && styles.pin));
+  });
+}
+
 /** Map timeline property → Framer Motion / CSS prop name. */
-function motionKey(property: AnimProperty): string {
+function motionKey(property: AnimProperty, positionalOffsets = false): string {
   if (property === "blur") return "filter";
+  if (positionalOffsets && property === "x") return "marginLeft";
+  if (positionalOffsets && property === "y") return "marginTop";
   // Timeline x/y are absolute layer coordinates (same as styles.x/y), not transform offsets.
   if (property === "x") return "left";
   if (property === "y") return "top";
@@ -202,12 +226,17 @@ export function sampleClip(clip: AnimationClip, t: number): Record<string, Sampl
 }
 
 /** Convert sampled values into inline CSS (position + transform + opacity). */
-export function sampledToCss(v: SampledValues): CSSProperties {
+export function sampledToCss(v: SampledValues, positionalOffsets = false): CSSProperties {
   const css: CSSProperties = {};
   const parts: string[] = [];
-  // x/y are absolute coordinates — override static left/top instead of additive translate.
-  if (v.x !== undefined) css.left = v.x;
-  if (v.y !== undefined) css.top = v.y;
+  if (v.x !== undefined) {
+    if (positionalOffsets) css.marginLeft = v.x;
+    else css.left = v.x;
+  }
+  if (v.y !== undefined) {
+    if (positionalOffsets) css.marginTop = v.y;
+    else css.top = v.y;
+  }
   if (v.scale !== undefined) parts.push(`scale(${v.scale})`);
   if (v.rotate !== undefined) parts.push(`rotate(${v.rotate}deg)`);
   if (parts.length > 0) css.transform = parts.join(" ");
@@ -222,7 +251,8 @@ export function buildClipMotionMap(project: SerializedProject, pageId: string): 
     if (clip.pageId !== pageId) continue;
     const nodeIds = new Set(clip.tracks.map((t) => t.nodeId));
     for (const nodeId of nodeIds) {
-      const kf = nodeMotionKeyframes(clip, nodeId);
+      const node = project.nodes[nodeId];
+      const kf = nodeMotionKeyframes(clip, nodeId, Boolean(node && usesPinnedAnimationOffsets(node)));
       if (!kf) continue;
       const target: Record<string, unknown> = { ...kf.values };
       const transition: Record<string, unknown> = {};
@@ -279,7 +309,7 @@ export interface MotionKeyframes {
  * Build Framer Motion keyframe props for one node from a clip.
  * Motion requires a value/time pair list per property.
  */
-export function nodeMotionKeyframes(clip: AnimationClip, nodeId: string): MotionKeyframes | null {
+export function nodeMotionKeyframes(clip: AnimationClip, nodeId: string, positionalOffsets = false): MotionKeyframes | null {
   const tracks = clip.tracks.filter((tr) => tr.nodeId === nodeId && tr.keyframes.length > 0);
   if (tracks.length === 0) return null;
   const values: Record<string, (number | string)[]> = {};
@@ -302,9 +332,10 @@ export function nodeMotionKeyframes(clip: AnimationClip, nodeId: string): Motion
       ts.push(1);
       es.push(EASING_BEZIER.linear);
     }
-    values[motionKey(track.property)] = vs.map((v) => motionValue(track.property, v));
-    times[motionKey(track.property)] = ts;
-    eases[motionKey(track.property)] = es;
+    const key = motionKey(track.property, positionalOffsets);
+    values[key] = vs.map((v) => motionValue(track.property, v));
+    times[key] = ts;
+    eases[key] = es;
   }
   return { values, times, eases, duration: clipDuration(clip) };
 }

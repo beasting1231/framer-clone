@@ -1,5 +1,6 @@
 import type { CmsCollection, CmsEntry, Node } from "../model/types";
 import type { GenCtx } from "./generate";
+import { resolveComponentVariant } from "../model/resolve";
 
 function escapeHtml(text: string): string {
   return text
@@ -28,7 +29,7 @@ function emitStaticNode(ctx: GenCtx, id: string, scope: StaticScope, indent: str
   if (node.type === "instance" && node.componentId) {
     const comp = ctx.project.components.find((c) => c.id === node.componentId);
     if (!comp) return "";
-    const masterRoot = ctx.project.nodes[comp.rootId];
+    const masterRoot = ctx.project.nodes[resolveComponentVariant(comp, "desktop").rootId];
     if (!masterRoot) return "";
     const children = masterRoot.children
       .map((c) => emitStaticNode(ctx, c, scope, indent + "  "))

@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { docActions, useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
 import { copySelection, cutSelection, pasteClipboard, hasClipboard } from "./clipboard";
+import { componentRootIds } from "@/model/resolve";
 
 export function CanvasContextMenu() {
   const menu = useEditor((s) => s.contextMenu);
@@ -17,7 +18,7 @@ export function CanvasContextMenu() {
   if (!menu || !project) return null;
   const s = useEditor.getState();
   const node = menu.nodeId ? project.nodes[menu.nodeId] : null;
-  const isRoot = node ? project.pages.some((p) => p.rootId === node.id) || project.components.some((c) => c.rootId === node.id) : false;
+  const isRoot = node ? project.pages.some((p) => p.rootId === node.id) || project.components.some((c) => componentRootIds(c).includes(node.id)) : false;
   const close = () => useEditor.getState().setContextMenu(null);
 
   const item = (label: string, action: () => void, opts: { shortcut?: string; danger?: boolean; disabled?: boolean } = {}) => (

@@ -1,7 +1,11 @@
+import { validateCustomBehaviors, type CustomCodeBehavior } from "./customBehavior";
+
 export interface CustomCodeProposal {
   nodeId: string;
   html: string;
   css?: string;
+  behaviorVersion?: 1;
+  behaviors?: CustomCodeBehavior[];
   note?: string;
 }
 
@@ -38,6 +42,8 @@ export function validateCustomCodeProposal(value: CustomCodeProposal): string[] 
   if (/\son[a-z]+\s*=/i.test(value.html)) errors.push("Custom HTML cannot include inline event handlers.");
   if (/javascript\s*:/i.test(value.html) || /javascript\s*:/i.test(value.css || "")) errors.push("Custom code cannot include javascript: URLs.");
   if (/@import\b/i.test(value.css || "")) errors.push("Custom CSS cannot include @import.");
+  if (value.behaviorVersion !== undefined && value.behaviorVersion !== 1) errors.push("Custom behavior version must be 1.");
+  errors.push(...validateCustomBehaviors(value.behaviors));
   return errors;
 }
 

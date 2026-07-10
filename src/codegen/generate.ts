@@ -12,7 +12,7 @@ import {
   type SerializedProject,
   type StyleProps,
 } from "../model/types";
-import { nodeStyles } from "../model/resolve";
+import { componentRootIds, componentVariants, nodeStyles, resolveComponentVariant } from "../model/resolve";
 import { stylesToCss, type CssContext } from "../model/css";
 import { getHoverStyles, resolveHoverAppearance } from "../model/hover";
 import { clipMotionAttrs } from "../model/animation";
@@ -102,6 +102,10 @@ export function buildCtx(project: SerializedProject): GenCtx {
 const rewriteAsset = (ctx: GenCtx, src: string) =>
   src.startsWith(ctx.assetPrefix) ? `/assets/${src.slice(ctx.assetPrefix.length)}` : src;
 
+function componentVariantClass(componentId: string, variantId: string): string {
+  return `fc-${slug(componentId)}-variant-${slug(variantId)}`;
+}
+
 // ── CSS generation ───────────────────────────────────────────────────────────
 
 function parentCtxAt(ctx: GenCtx, node: Node, bp: BreakpointId): CssContext {
@@ -139,7 +143,7 @@ function generateCss(ctx: GenCtx): string {
   const tabletRules: string[] = [];
   const phoneRules: string[] = [];
 
-  const masterRootIds = new Set(project.components.map((c) => c.rootId));
+  const masterRootIds = new Set(project.components.flatMap((component) => componentRootIds(component)));
 
   const emitNodeCss = (id: string) => {
     const node = project.nodes[id];
@@ -188,7 +192,9 @@ function generateCss(ctx: GenCtx): string {
   // component masters first so instance classes override them
   for (const comp of project.components) {
     sections.push(`/* ── Component: ${comp.name} ${"─".repeat(Math.max(3, 40 - comp.name.length))} */`);
-    for (const id of collectTreeIds(ctx, comp.rootId)) emitNodeCss(id);
+    for (const rootId of componentRootIds(comp)) {
+      for (const id of collectTreeIds(ctx, rootId)) emitNodeCss(id);
+    }
   }
   for (const page of project.pages) {
     sections.push(`/* ── Page: ${page.name} ${"─".repeat(Math.max(3, 45 - page.name.length))} */`);
@@ -198,9 +204,23 @@ function generateCss(ctx: GenCtx): string {
   const tabletBp = BREAKPOINTS.find((b) => b.id === "tablet")!;
   const phoneBp = BREAKPOINTS.find((b) => b.id === "phone")!;
 
+  const hiddenVariantsAt = (breakpoint: BreakpointId) =>
+    project.components.flatMap((component) => {
+      const active = resolveComponentVariant(component, breakpoint).id;
+      return componentVariants(component)
+        .filter((variant) => variant.id !== active)
+        .map((variant) => `  .${componentVariantClass(component.id, variant.id)} { display: none !important; }`);
+    });
+  const desktopVariantRules = hiddenVariantsAt("desktop");
+  const tabletVariantRules = hiddenVariantsAt("tablet");
+  const phoneVariantRules = hiddenVariantsAt("phone");
+
   let css = RESET_CSS + "\n" + sections.join("\n\n") + "\n";
+  if (desktopVariantRules.length > 0) css += `\n@media (min-width: ${BREAKPOINTS[0].minWidth}px) {\n${desktopVariantRules.join("\n")}\n}\n`;
+  // Responsive styles retain the existing desktop -> tablet -> phone cascade.
   if (tabletRules.length > 0) css += `\n@media (max-width: ${tabletBp.maxWidth}px) {\n${tabletRules.join("\n\n")}\n}\n`;
-  if (phoneRules.length > 0) css += `\n@media (max-width: ${phoneBp.maxWidth}px) {\n${phoneRules.join("\n\n")}\n}\n`;
+  if (tabletVariantRules.length > 0) css += `\n@media (min-width: ${tabletBp.minWidth}px) and (max-width: ${tabletBp.maxWidth}px) {\n${tabletVariantRules.join("\n")}\n}\n`;
+  if (phoneRules.length > 0 || phoneVariantRules.length > 0) css += `\n@media (max-width: ${phoneBp.maxWidth}px) {\n${[...phoneRules, ...phoneVariantRules].join("\n\n")}\n}\n`;
   return css;
 }
 
@@ -259,6 +279,7 @@ textarea {
 interface FileImports {
   motion: boolean;
   link: boolean;
+  customCode: boolean;
   components: Set<string>;
   collections: Set<string>;
 }
@@ -402,7 +423,7 @@ function emitNode(ctx: GenCtx, id: string, scope: Scope, imports: FileImports, i
   if (motion) imports.motion = true;
   const skipEntrance = scope.pageId ? hasClipMotion(ctx, scope.pageId, id) : false;
   const fx = [motion ? motionProps(node, skipEntrance) : "", scope.pageId ? clipMotionAttrs(ctx.project, scope.pageId, id) : ""].filter(Boolean).join("");
-  const overrideKey = jsString(cls);
+  const overrideKey = jsString(ctx.classNames.get(node.variantSourceId ?? id) ?? cls);
   const ov = scope.inComponent ? `overrides[${overrideKey}]` : null;
 
   // ── component instance
@@ -435,14 +456,11 @@ function emitNode(ctx: GenCtx, id: string, scope: Scope, imports: FileImports, i
 
   // ── custom code override
   if (node.customCode) {
-    const baseTag: string = node.tag && !["input", "textarea"].includes(node.tag) ? node.tag : "div";
-    const el = motion ? `motion.${baseTag}` : baseTag;
+    imports.customCode = true;
     const scopedCss = scopeCustomCodeCss(node.id, node.customCode.css);
-    const styleNode = scopedCss
-      ? `\n${indent}  <style dangerouslySetInnerHTML={{ __html: ${jsString(scopedCss)} }} />`
-      : "";
     const html = sanitizeCustomCodeHtml(node.customCode.html);
-    const custom = `${indent}<${el} className=${className} data-custom-code-node=${jsString(node.id)}${fx}>${styleNode}\n${indent}  <div dangerouslySetInnerHTML={{ __html: ${jsString(html)} }} />\n${indent}</${el}>`;
+    const behaviors = JSON.stringify(node.customCode.behaviors ?? []);
+    const custom = `${indent}<CustomCodeRuntime className=${className} nodeId={${jsString(node.id)}} html={${jsString(html)}} css={${jsString(scopedCss)}} behaviors={${behaviors}} animated={${motion}}${fx} />`;
     const linkInfo = linkAttrs(ctx, node, scope, imports);
     if (linkInfo) {
       const indented = custom
@@ -540,6 +558,7 @@ function fileHeader(imports: FileImports, ctx: GenCtx, opts: { useParams?: boole
   if (opts.useParams) routerImports.push("useParams");
   if (routerImports.length > 0) lines.push(`import { ${routerImports.join(", ")} } from "react-router-dom";`);
   if (imports.motion) lines.push(`import { motion } from "framer-motion";`);
+  if (imports.customCode) lines.push(`import { CustomCodeRuntime } from "../CustomCodeRuntime";`);
   for (const comp of [...imports.components].sort()) {
     lines.push(`import { ${comp} } from "../components/${comp}";`);
   }
@@ -550,7 +569,7 @@ function fileHeader(imports: FileImports, ctx: GenCtx, opts: { useParams?: boole
 }
 
 function newImports(): FileImports {
-  return { motion: false, link: false, components: new Set(), collections: new Set() };
+  return { motion: false, link: false, customCode: false, components: new Set(), collections: new Set() };
 }
 
 // ── File emitters ────────────────────────────────────────────────────────────
@@ -583,11 +602,23 @@ function emitComponentFile(ctx: GenCtx, componentId: string): string {
   const comp = ctx.project.components.find((c) => c.id === componentId)!;
   const name = ctx.componentNames.get(componentId)!;
   const imports = newImports();
-  const jsx = emitNode(ctx, comp.rootId, { inComponent: true }, imports, "    ", "className");
+  const variants = componentVariants(comp);
+  const jsx = variants
+    .map((variant) =>
+      emitNode(
+        ctx,
+        variant.rootId,
+        { inComponent: true },
+        imports,
+        "      ",
+        `className + ${jsString(` ${componentVariantClass(comp.id, variant.id)}`)}`,
+      ),
+    )
+    .join("\n");
   return (
     fileHeader(imports, ctx).replace(/\.\.\/components\//g, "./") +
     `export interface ${name}Props {\n  className?: string;\n  overrides?: Record<string, { text?: string; src?: string; visible?: boolean }>;\n}\n\n` +
-    `export function ${name}({ className = "", overrides = {} }: ${name}Props) {\n  return (\n${jsx}\n  );\n}\n`
+    `export function ${name}({ className = "", overrides = {} }: ${name}Props) {\n  return (\n    <>\n${jsx}\n    </>\n  );\n}\n`
   );
 }
 
@@ -663,6 +694,126 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </StrictMode>,
 );
+`;
+
+const SITE_CUSTOM_CODE_RUNTIME = `import { useEffect, useRef, type ElementType } from "react";
+import { motion } from "framer-motion";
+
+type Behavior = {
+  id: string;
+  event: "mount" | "click" | "double-click" | "hover-enter" | "hover-leave" | "focus" | "blur";
+  target?: string;
+  once?: boolean;
+  actions: Array<Record<string, unknown> & { type: "animate" | "class" | "style" | "attribute" | "text" }>;
+};
+
+function resolveTargets(host: HTMLElement, selector?: string): HTMLElement[] {
+  if (!selector || selector === ":host") return [host];
+  try {
+    return Array.from(host.querySelectorAll<HTMLElement>(selector));
+  } catch {
+    return [];
+  }
+}
+
+function mountBehaviors(host: HTMLElement, behaviors: Behavior[]) {
+  const cleanups: Array<() => void> = [];
+  const running = new Map<string, Animation[]>();
+  const run = (behavior: Behavior) => {
+    behavior.actions.forEach((action, actionIndex) => {
+      resolveTargets(host, typeof action.target === "string" ? action.target : undefined).forEach((target, targetIndex) => {
+        const key = \`\${behavior.id}:\${actionIndex}:\${targetIndex}\`;
+        if (action.type === "animate") {
+          const active = (running.get(key) ?? []).filter((animation) => animation.playState === "running");
+          if (action.retrigger === "ignore-while-running" && active.length) return;
+          active.forEach((animation) => animation.cancel());
+          const animation = target.animate((action.keyframes as Keyframe[]) ?? [], {
+            duration: Number(action.duration) || 0,
+            delay: Number(action.delay) || 0,
+            easing: typeof action.easing === "string" ? action.easing : "ease",
+            iterations: Number(action.iterations) || 1,
+            direction: (action.direction as PlaybackDirection) || "normal",
+            fill: (action.fill as FillMode) || "both",
+          });
+          running.set(key, [animation]);
+          void animation.finished.then(() => {
+            if (action.fill === undefined || action.fill === "forwards" || action.fill === "both") {
+              try {
+                animation.commitStyles();
+              } catch {
+                return;
+              }
+              animation.cancel();
+            }
+          }).catch(() => {}).finally(() => {
+            if (running.get(key)?.includes(animation)) running.delete(key);
+          });
+          return;
+        }
+        if (action.type === "class") {
+          const className = String(action.className || "");
+          const operation = action.operation as "add" | "remove" | "toggle";
+          if (className && operation) target.classList[operation](className);
+        }
+        if (action.type === "style" && action.styles && typeof action.styles === "object") {
+          Object.entries(action.styles as Record<string, string | number>).forEach(([property, value]) => target.style.setProperty(property, String(value)));
+        }
+        if (action.type === "attribute") {
+          const name = String(action.name || "");
+          if (action.value === null || action.value === false) target.removeAttribute(name);
+          else target.setAttribute(name, action.value === true ? "" : String(action.value ?? ""));
+        }
+        if (action.type === "text") target.textContent = String(action.value ?? "");
+      });
+    });
+  };
+  behaviors.forEach((behavior) => {
+    if (behavior.event === "mount") {
+      run(behavior);
+      return;
+    }
+    const eventName = behavior.event === "double-click" ? "dblclick" : behavior.event === "hover-enter" ? "pointerenter" : behavior.event === "hover-leave" ? "pointerleave" : behavior.event;
+    resolveTargets(host, behavior.target).forEach((target) => {
+      const listener = () => run(behavior);
+      target.addEventListener(eventName, listener, { once: behavior.once });
+      cleanups.push(() => target.removeEventListener(eventName, listener));
+    });
+  });
+  return () => {
+    cleanups.forEach((cleanup) => cleanup());
+    running.forEach((animations) => animations.forEach((animation) => animation.cancel()));
+  };
+}
+
+export function CustomCodeRuntime({
+  className,
+  nodeId,
+  html,
+  css,
+  behaviors = [],
+  animated = false,
+  ...motionProps
+}: {
+  className?: string;
+  nodeId: string;
+  html: string;
+  css?: string;
+  behaviors?: Behavior[];
+  animated?: boolean;
+} & Record<string, unknown>) {
+  const ref = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!ref.current) return;
+    return mountBehaviors(ref.current, behaviors);
+  }, [behaviors, html]);
+  const Component = (animated ? motion.div : "div") as ElementType;
+  return (
+    <Component ref={ref} className={className} data-custom-code-node={nodeId} data-custom-code="true" {...motionProps}>
+      {css ? <style dangerouslySetInnerHTML={{ __html: css }} /> : null}
+      <div dangerouslySetInnerHTML={{ __html: html }} />
+    </Component>
+  );
+}
 `;
 
 function sitePackageJson(project: SerializedProject): string {
@@ -793,6 +944,7 @@ export async function generateSite(project: SerializedProject, outDir: string): 
     writeFormatted(path.join(outDir, "index.html"), siteIndexHtml(project)),
     writeFormatted(path.join(outDir, "README.md"), siteReadme(project)),
     writeFormatted(path.join(src, "main.tsx"), SITE_MAIN),
+    writeFormatted(path.join(src, "CustomCodeRuntime.tsx"), SITE_CUSTOM_CODE_RUNTIME),
     writeFormatted(path.join(src, "App.tsx"), emitApp(ctx)),
     writeFormatted(path.join(src, "styles.css"), generateCss(ctx)),
     writeFormatted(path.join(src, "cms", "data.ts"), emitCmsData(ctx)),

@@ -2,6 +2,7 @@ import { useState, type DragEvent } from "react";
 import { docActions, useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
 import type { Node } from "@/model/types";
+import { resolveComponentVariant } from "@/model/resolve";
 import {
   IconCaret,
   IconComponent,
@@ -49,6 +50,7 @@ interface DropState {
 export function LayersTab() {
   const project = useDocument((s) => s.project);
   const context = useEditor((s) => s.context);
+  const breakpoint = useEditor((s) => s.breakpoint);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [drop, setDrop] = useState<DropState | null>(null);
@@ -57,7 +59,10 @@ export function LayersTab() {
   const rootId =
     context.kind === "page"
       ? project.pages.find((p) => p.id === context.pageId)?.rootId
-      : project.components.find((c) => c.id === context.componentId)?.rootId;
+      : (() => {
+          const component = project.components.find((c) => c.id === context.componentId);
+          return component ? resolveComponentVariant(component, breakpoint).rootId : undefined;
+        })();
   if (!rootId) return null;
 
   return (

@@ -213,13 +213,27 @@ export function ColorInput({ value, onChange }: { value: string; onChange: (colo
 }
 
 export function Section({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
+  const [isOpen, setIsOpen] = useState(true);
+
   return (
-    <div className="prop-section">
+    <div className={`prop-section ${isOpen ? "is-open" : "is-collapsed"}`}>
       <div className="prop-section-header">
-        {title}
-        {action}
+        <button
+          type="button"
+          className="prop-section-toggle"
+          aria-expanded={isOpen}
+          onClick={() => setIsOpen((open) => !open)}
+        >
+          <span>{title}</span>
+          <span className="prop-section-chevron" aria-hidden="true" />
+        </button>
+        {action && <div className="prop-section-action">{action}</div>}
       </div>
-      {children}
+      <div className="prop-section-collapse" aria-hidden={!isOpen}>
+        <div className="prop-section-content">
+          <div className="prop-section-content-inner">{children}</div>
+        </div>
+      </div>
     </div>
   );
 }

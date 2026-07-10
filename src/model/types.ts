@@ -16,9 +16,9 @@ export interface BreakpointDef {
 }
 
 export const BREAKPOINTS: BreakpointDef[] = [
-  { id: "desktop", label: "Desktop", width: 1200, minWidth: 810, maxWidth: null },
-  { id: "tablet", label: "Tablet", width: 810, minWidth: 390, maxWidth: 809.98 },
-  { id: "phone", label: "Phone", width: 390, minWidth: null, maxWidth: 389.98 },
+  { id: "desktop", label: "Desktop", width: 1200, minWidth: 811, maxWidth: null },
+  { id: "tablet", label: "Tablet", width: 810, minWidth: 391, maxWidth: 810 },
+  { id: "phone", label: "Phone", width: 390, minWidth: null, maxWidth: 390 },
 ];
 
 /** Cascade order: phone inherits from tablet which inherits from desktop. */
@@ -99,7 +99,17 @@ export interface StyleProps {
   sticky?: boolean;
   stickyOffset?: number;
   zIndex?: number;
+  translateX?: number;
+  translateY?: number;
+  translateZ?: number;
   rotation?: number;
+  rotationX?: number;
+  rotationY?: number;
+  scaleX?: number;
+  scaleY?: number;
+  perspective?: number;
+  transformOriginX?: number;
+  transformOriginY?: number;
 
   // layout (container)
   layout?: LayoutMode;
@@ -275,6 +285,8 @@ export interface CmsBinding {
 export interface CustomCodeBlock {
   html: string;
   css?: string;
+  behaviorVersion?: 1;
+  behaviors?: import("./customBehavior").CustomCodeBehavior[];
   note?: string;
   appliedAt?: string;
 }
@@ -313,6 +325,8 @@ export interface Node {
   componentId?: string;
   /** overrides keyed by master node id */
   overrides?: Record<string, InstanceOverride>;
+  /** Canonical node in the source variant; keeps instance overrides shared across cloned device variants. */
+  variantSourceId?: string;
 
   // CMS
   binding?: CmsBinding;
@@ -344,6 +358,17 @@ export interface Page {
 }
 
 export interface ComponentDef {
+  id: string;
+  name: string;
+  /** Legacy/default root. Kept for backward compatibility and synced to the desktop variant. */
+  rootId: string;
+  /** Structural component states. Older projects without this field behave as one Default variant. */
+  variants?: ComponentVariant[];
+  /** Sparse device mapping; tablet inherits desktop and phone inherits tablet/desktop. */
+  variantByBreakpoint?: Partial<Record<BreakpointId, string>>;
+}
+
+export interface ComponentVariant {
   id: string;
   name: string;
   rootId: string;

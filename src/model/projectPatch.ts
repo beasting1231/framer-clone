@@ -1,7 +1,8 @@
 import { buildTemplate, type TemplateId } from "@/insert/templates";
-import { syncClipDuration } from "./animation";
+import { pruneMissingAnimationTracks, syncClipDuration } from "./animation";
 import { validateCustomCodeProposal } from "./customCode";
 import { uid } from "./factory";
+import { componentRootIds, componentVariants } from "./resolve";
 import type { AnimEasing, AnimProperty, AnimationClip, BreakpointId, Node, SerializedProject, StyleProps } from "./types";
 
 export type ProjectPatchOp =
@@ -66,7 +67,17 @@ const STYLE_KEYS = new Set<keyof StyleProps>([
   "sticky",
   "stickyOffset",
   "zIndex",
+  "translateX",
+  "translateY",
+  "translateZ",
   "rotation",
+  "rotationX",
+  "rotationY",
+  "scaleX",
+  "scaleY",
+  "perspective",
+  "transformOriginX",
+  "transformOriginY",
   "layout",
   "direction",
   "gap",
@@ -141,8 +152,18 @@ export function validateProject(project: SerializedProject): ValidationResult {
     else if (project.nodes[page.rootId].parent !== null) errors.push(`Page root ${page.rootId} must not have a parent.`);
   }
   for (const component of project.components) {
-    if (!project.nodes[component.rootId]) errors.push(`Component ${component.name} has missing root ${component.rootId}.`);
-    else if (project.nodes[component.rootId].parent !== null) errors.push(`Component root ${component.rootId} must not have a parent.`);
+    const variants = componentVariants(component);
+    const variantIds = new Set<string>();
+    for (const variant of variants) {
+      if (variantIds.has(variant.id)) errors.push(`Component ${component.name} has duplicate variant id ${variant.id}.`);
+      variantIds.add(variant.id);
+      if (!project.nodes[variant.rootId]) errors.push(`Component ${component.name} variant ${variant.name} has missing root ${variant.rootId}.`);
+      else if (project.nodes[variant.rootId].parent !== null) errors.push(`Component variant root ${variant.rootId} must not have a parent.`);
+    }
+    for (const [breakpoint, variantId] of Object.entries(component.variantByBreakpoint ?? {})) {
+      if (!BREAKPOINTS.has(breakpoint as BreakpointId)) errors.push(`Component ${component.name} has invalid breakpoint mapping ${breakpoint}.`);
+      if (variantId && !variantIds.has(variantId)) errors.push(`Component ${component.name} maps ${breakpoint} to missing variant ${variantId}.`);
+    }
   }
   validateAnimations(project, errors);
 
@@ -160,7 +181,9 @@ export function validateProject(project: SerializedProject): ValidationResult {
     visited.add(id);
   };
   for (const page of project.pages) visit(page.rootId);
-  for (const component of project.components) visit(component.rootId);
+  for (const component of project.components) {
+    for (const rootId of componentRootIds(component)) visit(rootId);
+  }
   for (const id of Object.keys(project.nodes)) {
     if (!visited.has(id)) errors.push(`Node ${id} is orphaned.`);
   }
@@ -283,6 +306,7 @@ export function applyProjectPatch(project: SerializedProject, patch: ProjectPatc
     }
   }
 
+  pruneMissingAnimationTracks(next);
   const after = validateProject(next);
   if (!after.ok) throw new Error(`Patch would make project invalid: ${after.errors.join(" ")}`);
   next.meta.updatedAt = new Date().toISOString();
@@ -524,7 +548,7 @@ function clampIndex(index: number | undefined, length: number) {
 
 function deleteNode(project: SerializedProject, id: string, changed: Set<string>) {
   const node = requireNode(project, id);
-  if (project.pages.some((page) => page.rootId === id) || project.components.some((component) => component.rootId === id)) {
+  if (project.pages.some((page) => page.rootId === id) || project.components.some((component) => componentRootIds(component).includes(id))) {
     throw new Error(`Cannot delete root node ${id}.`);
   }
   if (node.parent) {

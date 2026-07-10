@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { CSSProperties } from "react";
-import { sampleClip, sampledToCss } from "@/model/animation";
+import { sampleClip, sampledToCss, usesPinnedAnimationOffsets } from "@/model/animation";
 import { useDocument } from "./document";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,11 +45,15 @@ interface TimelineState {
 function computePreview(clipId: string | null, t: number): Record<string, CSSProperties> {
   if (!clipId) return {};
   const project = useDocument.getState().project;
-  const clip = project?.animations?.find((c) => c.id === clipId);
+  if (!project) return {};
+  const clip = project.animations?.find((c) => c.id === clipId);
   if (!clip) return {};
   const sampled = sampleClip(clip, t);
   const out: Record<string, CSSProperties> = {};
-  for (const [nodeId, values] of Object.entries(sampled)) out[nodeId] = sampledToCss(values);
+  for (const [nodeId, values] of Object.entries(sampled)) {
+    const node = project.nodes[nodeId];
+    out[nodeId] = sampledToCss(values, Boolean(node && usesPinnedAnimationOffsets(node)));
+  }
   return out;
 }
 

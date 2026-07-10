@@ -1,4 +1,5 @@
 import { docActions, useDocument } from "@/store/document";
+import { resolveComponentVariant } from "@/model/resolve";
 import { useEditor } from "@/store/editor";
 import { insertTemplate, isSectionTemplate, type TemplateId } from "@/insert/templates";
 import { uid } from "@/model/factory";
@@ -59,7 +60,10 @@ export function InsertTab() {
     const proj = useDocument.getState().project!;
     const ctx = state.context;
     if (ctx?.kind === "page") return proj.pages.find((p) => p.id === ctx.pageId)?.rootId ?? null;
-    if (ctx?.kind === "component") return proj.components.find((c) => c.id === ctx.componentId)?.rootId ?? null;
+    if (ctx?.kind === "component") {
+      const component = proj.components.find((c) => c.id === ctx.componentId);
+      return component ? resolveComponentVariant(component, state.breakpoint).rootId : null;
+    }
     return null;
   };
 
@@ -94,7 +98,10 @@ export function InsertTab() {
     const ctx = state.context;
     let parentId: string | null = null;
     if (ctx?.kind === "page") parentId = proj.pages.find((p) => p.id === ctx.pageId)?.rootId ?? null;
-    else if (ctx?.kind === "component") parentId = proj.components.find((c) => c.id === ctx.componentId)?.rootId ?? null;
+    else if (ctx?.kind === "component") {
+      const component = proj.components.find((c) => c.id === ctx.componentId);
+      parentId = component ? resolveComponentVariant(component, state.breakpoint).rootId : null;
+    }
     if (!parentId) return;
     const comp = proj.components.find((c) => c.id === componentId);
     if (!comp) return;

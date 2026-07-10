@@ -1,9 +1,11 @@
 import fsp from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import type { Request, Response, Router } from "express";
 import express from "express";
 import { buildAgentEditorGuide } from "../src/model/agentGuide";
+import { pruneMissingAnimationTracks } from "../src/model/animation";
 import type { SerializedProject } from "../src/model/types";
 import { hashProject } from "../src/model/projectHash";
 import { validateProject } from "../src/model/projectPatch";
@@ -24,6 +26,7 @@ type CodexRunResult = {
 
 type CodexSendBody = {
   prompt?: string;
+  images?: unknown;
   conversation?: unknown;
   selection?: unknown;
   model?: string;
@@ -54,6 +57,7 @@ type CodexSession = {
   agentVersion: string;
   child: ChildProcess | null;
   busy: boolean;
+  runId: number;
   startedAt: number;
 };
 
@@ -65,7 +69,7 @@ type CodexRouterOptions = {
 };
 
 const sessions = new Map<string, CodexSession>();
-const CODEX_AGENT_VERSION = "direct-edit-v1";
+const CODEX_AGENT_VERSION = "direct-edit-v2-behaviors";
 const DEFAULT_CODEX_MODEL = "gpt-5.6-sol";
 const CODEX_MODEL_CAPABILITIES: Record<string, { defaultReasoning: string; reasoning: Set<string>; fast: boolean }> = {
   "gpt-5.6-sol": { defaultReasoning: "low", reasoning: new Set(["low", "medium", "high", "xhigh", "max", "ultra"]), fast: true },
@@ -105,8 +109,10 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
     const projectId = req.params.id;
     const projectPath = assertProjectPath(projectId, options.projectsDir);
     const body = req.body as CodexSendBody;
-    const prompt = String(body.prompt || "").trim();
-    if (!prompt) return res.status(400).json({ ok: false, error: "Enter a message." });
+    const rawPrompt = String(body.prompt || "").trim();
+    const hasImages = Array.isArray(body.images) && body.images.length > 0;
+    if (!rawPrompt && !hasImages) return res.status(400).json({ ok: false, error: "Enter a message or paste an image." });
+    const prompt = rawPrompt || "Use the attached image or images as the reference for this request.";
 
     const status = await getCodexStatus();
     if (!status.authenticated) return res.status(401).json({ ok: false, unauthenticated: true, error: "Codex is not authenticated." });
@@ -116,6 +122,11 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
 
     const project = await options.readProject(projectId);
     if (!project) return res.status(404).json({ ok: false, error: "Project not found." });
+    const repairedTracks = pruneMissingAnimationTracks(project);
+    if (repairedTracks > 0) {
+      await options.writeProject(projectId, project);
+      console.warn(`[codex] removed ${repairedTracks} stale animation track(s) from ${projectId}`);
+    }
     const currentHash = hashProject(project);
     if (body.projectHash && body.projectHash !== currentHash) {
       console.warn(`[codex] client revision mismatch for ${projectId}; continuing with latest saved project`);
@@ -133,7 +144,15 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
       currentPageId: body.currentPageId,
       breakpoint: body.breakpoint,
     });
+    let imageBatch: Awaited<ReturnType<typeof materializeCodexImages>>;
+    try {
+      imageBatch = await materializeCodexImages(body.images);
+    } catch (error) {
+      return res.status(400).json({ ok: false, error: String((error as Error).message || error) });
+    }
 
+    const runId = session.runId + 1;
+    session.runId = runId;
     session.busy = true;
     emitProgress(res, { type: "status", text: "Thinking...", projectId });
     const model = sanitizeCodexModel(body.model);
@@ -147,11 +166,14 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
       model,
       reasoning: sanitizeCodexReasoning(body.reasoning, model),
       speed: sanitizeCodexSpeed(body.speed, model),
+      imagePaths: imageBatch.paths,
       onProgress: (payload) => emitProgress(res, { ...payload, projectId }),
-    });
-    session.busy = false;
-    session.child = null;
-    if (result.threadId) session.threadId = result.threadId;
+    }).finally(() => imageBatch.cleanup());
+    if (session.runId === runId) {
+      session.busy = false;
+      session.child = null;
+      if (result.threadId) session.threadId = result.threadId;
+    }
 
     if (!result.ok) {
       return res.json({
@@ -205,6 +227,8 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
     node.customCode = {
       html: sanitizeCustomCodeHtml(proposal.html),
       css: sanitizeCustomCodeCss(proposal.css),
+      behaviorVersion: proposal.behaviors?.length ? 1 : undefined,
+      behaviors: proposal.behaviors?.length ? structuredClone(proposal.behaviors) : undefined,
       note: proposal.note?.slice(0, 500),
       appliedAt: new Date().toISOString(),
     };
@@ -230,6 +254,7 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
     const session = sessions.get(req.params.id);
     if (session?.child) session.child.kill("SIGTERM");
     if (session) {
+      session.runId += 1;
       session.busy = false;
       session.child = null;
     }
@@ -259,7 +284,7 @@ function getSession(projectId: string, projectPath: string): CodexSession {
     }
     return existing;
   }
-  const session = { projectId, projectPath, threadId: "", agentVersion: CODEX_AGENT_VERSION, child: null, busy: false, startedAt: Date.now() };
+  const session = { projectId, projectPath, threadId: "", agentVersion: CODEX_AGENT_VERSION, child: null, busy: false, runId: 0, startedAt: Date.now() };
   sessions.set(projectId, session);
   return session;
 }
@@ -307,8 +332,14 @@ async function buildFramerCodexPrompt(
     "- For normal editor-supported changes, edit framer.json directly.",
     "- If the request needs custom HTML/CSS that the editor model cannot represent, do not edit framer.json.",
     "- For custom-code-only work, ask for approval by ending your final answer with exactly this machine-readable line:",
-    'CUSTOM_CODE_REQUEST: {"nodeId":"target node id","html":"safe HTML fragment","css":"optional CSS using :host for the target wrapper","note":"why custom code is needed"}',
-    "- Custom code must be a static HTML/CSS fragment only. Do not include scripts, inline event handlers, external imports, or javascript: URLs.",
+    'CUSTOM_CODE_REQUEST: {"nodeId":"target node id","html":"safe HTML fragment","css":"optional scoped CSS using :host","behaviorVersion":1,"behaviors":[],"note":"why custom code is needed"}',
+    "- Custom HTML/CSS must remain static. Do not include scripts, inline event handlers, external imports, or javascript: URLs.",
+    "- Interactive custom code must use the declarative behaviors array, never JavaScript.",
+    '- A behavior is {"id":"safe-id","event":"mount|click|double-click|hover-enter|hover-leave|focus|blur","target":":host or a descendant selector","once":false,"actions":[]}.',
+    '- Actions may be: {"type":"animate","target":":host or selector","keyframes":[{"transform":"rotate(0deg)"},{"transform":"rotate(360deg)"}],"duration":800,"delay":0,"easing":"ease","iterations":1,"direction":"normal","fill":"both","retrigger":"restart|ignore-while-running"}.',
+    '- Or {"type":"class","target":"selector","className":"active","operation":"add|remove|toggle"}, {"type":"style","target":"selector","styles":{"opacity":"1"}}, {"type":"attribute","target":"selector","name":"aria-expanded","value":"true"}, or {"type":"text","target":"selector","value":"New text"}.',
+    "- Behavior selectors are scoped inside the approved component. Use :host for the component wrapper.",
+    "- To finish an animation after hover-out, define it on hover-enter and omit a canceling hover-leave rule. Use ignore-while-running to block retriggers until it finishes.",
     "- After changing files, briefly state what changed.",
     "",
     buildAgentEditorGuide(),
@@ -401,6 +432,7 @@ async function runCodexForDirectEdit(options: {
   model?: string;
   reasoning: string;
   speed: string;
+  imagePaths: string[];
   onProgress: (payload: CodexProgress) => void;
 }): Promise<
   | {
@@ -427,6 +459,7 @@ async function runCodexForDirectEdit(options: {
         model: options.model,
         reasoning: options.reasoning,
         speed: options.speed,
+        imagePaths: options.imagePaths,
       }),
       {
         cwd: options.projectPath,
@@ -443,6 +476,7 @@ async function runCodexForDirectEdit(options: {
       const changedFiles = await getChangedProjectFiles(options.projectPath, beforeSnapshot);
       const customCodeProposal = parseCustomCodeProposal(result.output);
       const project = await readProjectFile(options.projectPath);
+      if (project) pruneMissingAnimationTracks(project);
       let invalidCustomProposal = false;
       if (customCodeProposal && changedFiles.length > 0) {
         lastError = "Custom code proposals must not also edit project files before approval.";
@@ -520,6 +554,8 @@ function normalizeCustomCodeProposal(value: unknown): CustomCodeProposal | null 
     nodeId: String(source.nodeId || "").trim(),
     html: String(source.html || ""),
     css: source.css === undefined ? undefined : String(source.css),
+    behaviorVersion: source.behaviorVersion === undefined ? undefined : Number(source.behaviorVersion) as 1,
+    behaviors: Array.isArray(source.behaviors) ? (source.behaviors as CustomCodeProposal["behaviors"]) : undefined,
     note: source.note === undefined ? undefined : String(source.note),
   };
 }
@@ -644,7 +680,7 @@ function sanitizeCodexSpeed(value: unknown, model: string) {
   return text === "fast" && CODEX_MODEL_CAPABILITIES[model]?.fast ? "fast" : "default";
 }
 
-function buildCodexExecArgs(options: { cwd: string; prompt: string; threadId?: string; model?: string; reasoning: string; speed: string }) {
+function buildCodexExecArgs(options: { cwd: string; prompt: string; threadId?: string; model?: string; reasoning: string; speed: string; imagePaths: string[] }) {
   const flags = [
     "--skip-git-repo-check",
     "--dangerously-bypass-approvals-and-sandbox",
@@ -659,8 +695,49 @@ function buildCodexExecArgs(options: { cwd: string; prompt: string; threadId?: s
   ];
   if (options.speed === "fast") flags.push("-c", 'service_tier="priority"');
   flags.push("--json");
-  if (options.threadId) return ["exec", "resume", ...flags, options.threadId, options.prompt];
-  return ["exec", ...flags, "--cd", options.cwd, options.prompt];
+  const imageFlags = options.imagePaths.flatMap((imagePath) => ["--image", imagePath]);
+  if (options.threadId) return ["exec", "resume", ...flags, ...imageFlags, options.threadId, options.prompt];
+  return ["exec", ...flags, ...imageFlags, "--cd", options.cwd, options.prompt];
+}
+
+async function materializeCodexImages(value: unknown) {
+  if (!Array.isArray(value) || !value.length) {
+    return { paths: [] as string[], cleanup: async () => {} };
+  }
+  if (value.length > 8) throw new Error("You can attach up to 8 images per message.");
+  const mimeExtensions: Record<string, string> = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/webp": "webp",
+    "image/gif": "gif",
+  };
+  const decoded = value.map((item, index) => {
+    const source = item && typeof item === "object" ? (item as { dataUrl?: unknown }) : {};
+    const match = String(source.dataUrl || "").match(/^data:(image\/(?:png|jpeg|webp|gif));base64,([a-zA-Z0-9+/=]+)$/);
+    if (!match) throw new Error(`Image ${index + 1} is not a supported clipboard image.`);
+    const buffer = Buffer.from(match[2], "base64");
+    if (!buffer.length || buffer.length > 12 * 1024 * 1024) throw new Error(`Image ${index + 1} is too large.`);
+    return { buffer, extension: mimeExtensions[match[1]] };
+  });
+  const totalBytes = decoded.reduce((total, image) => total + image.buffer.length, 0);
+  if (totalBytes > 32 * 1024 * 1024) throw new Error("The attached images are too large together.");
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "framer-codex-images-"));
+  try {
+    const paths = await Promise.all(
+      decoded.map(async (image, index) => {
+        const imagePath = path.join(dir, `clipboard-${index + 1}.${image.extension}`);
+        await fsp.writeFile(imagePath, image.buffer);
+        return imagePath;
+      }),
+    );
+    return {
+      paths,
+      cleanup: () => fsp.rm(dir, { recursive: true, force: true }),
+    };
+  } catch (error) {
+    await fsp.rm(dir, { recursive: true, force: true });
+    throw error;
+  }
 }
 
 function runCodex(

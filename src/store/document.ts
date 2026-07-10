@@ -1,9 +1,9 @@
 import { create } from "zustand";
 import { api } from "@/api/client";
 import { createPageRoot, createPage, uid } from "@/model/factory";
-import { cloneSubtree, collectSubtree } from "@/model/resolve";
-import { defaultValueFor, migrateAnimationClips, clipDuration, syncClipDuration } from "@/model/animation";
-import type { BreakpointId, CmsCollection, CmsEntry, CmsField, ColorStyle, ComponentDef, Node, Page, SerializedProject, StyleProps, TextStyle, AnimEasing, AnimProperty, AnimKeyframe, AnimationClip } from "@/model/types";
+import { cloneSubtree, collectSubtree, componentRootIds, componentVariants, resolveComponentVariant } from "@/model/resolve";
+import { defaultValueFor, migrateAnimationClips, clipDuration, pruneMissingAnimationTracks, syncClipDuration } from "@/model/animation";
+import type { BreakpointId, CmsCollection, CmsEntry, CmsField, ColorStyle, ComponentDef, ComponentVariant, Node, Page, SerializedProject, StyleProps, TextStyle, AnimEasing, AnimProperty, AnimKeyframe, AnimationClip } from "@/model/types";
 import { nodeStyles } from "@/model/resolve";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -100,7 +100,9 @@ export const useDocument = create<DocumentState>((set, get) => ({
     if (saveTimer) clearTimeout(saveTimer);
     project.animations ??= []; // older projects predate timeline animations
     migrateAnimationClips(project.animations);
+    const repairedTracks = pruneMissingAnimationTracks(project);
     set({ project, projectId: id, saveState: "saved", undoStack: [], redoStack: [] });
+    if (repairedTracks > 0) scheduleSave(get, set);
   },
 
   close: () => {
@@ -129,6 +131,7 @@ export const useDocument = create<DocumentState>((set, get) => ({
     next.textStyles = [...project.textStyles];
     next.animations = (project.animations ?? []).map((c) => ({ ...c, tracks: c.tracks.map((t) => ({ ...t, keyframes: [...t.keyframes] })) }));
     fn(next);
+    pruneMissingAnimationTracks(next);
     set({ project: next });
     scheduleSave(get, set);
   },
@@ -173,6 +176,7 @@ export const useDocument = create<DocumentState>((set, get) => ({
     if (!project) return;
     agentProject.animations ??= [];
     migrateAnimationClips(agentProject.animations);
+    pruneMissingAnimationTracks(agentProject);
     set({
       project: agentProject,
       saveState: "saved",
@@ -260,7 +264,7 @@ export const docActions = {
         if (!node) continue;
         // don't delete page roots or component roots
         if (p.pages.some((page) => page.rootId === id)) continue;
-        if (p.components.some((c) => c.rootId === id)) continue;
+        if (p.components.some((c) => componentRootIds(c).includes(id))) continue;
         if (node.parent) {
           const parent = { ...p.nodes[node.parent] };
           parent.children = parent.children.filter((c) => c !== id);
@@ -464,7 +468,15 @@ export const docActions = {
       delete masterStyles.desktop.y;
       master.styles = masterStyles;
 
-      def = { id: uid(), name: node.name, rootId };
+      const componentId = uid();
+      const variant: ComponentVariant = { id: uid(), name: "Desktop", rootId };
+      def = {
+        id: componentId,
+        name: node.name,
+        rootId,
+        variants: [variant],
+        variantByBreakpoint: { desktop: variant.id },
+      };
       p.components.push(def);
 
       // replace original node with an instance
@@ -500,6 +512,50 @@ export const docActions = {
     });
   },
 
+  /** Duplicate the inherited/current structure into an independently editable device state. */
+  addComponentVariant(componentId: string, breakpoint: BreakpointId): ComponentVariant | null {
+    let created: ComponentVariant | null = null;
+    doc().mutate((p) => {
+      const index = p.components.findIndex((component) => component.id === componentId);
+      if (index < 0) return;
+      const current = p.components[index];
+      const existingVariants = componentVariants(current).map((variant) => ({ ...variant }));
+      const mapping = { ...(current.variantByBreakpoint ?? {}) };
+
+      // Materialize a legacy component before adding its first real variant.
+      if (!current.variants?.length) {
+        mapping.desktop = existingVariants[0].id;
+      }
+      const explicitlyAssigned = mapping[breakpoint];
+      if (explicitlyAssigned && existingVariants.some((variant) => variant.id === explicitlyAssigned)) return;
+
+      const source = resolveComponentVariant({ ...current, variants: existingVariants, variantByBreakpoint: mapping }, breakpoint);
+      const cloned = cloneSubtree(p.nodes, source.rootId, uid, true);
+      Object.assign(p.nodes, cloned.nodes);
+      p.nodes[cloned.rootId].parent = null;
+      const label = breakpoint === "phone" ? "Phone" : breakpoint === "tablet" ? "Tablet" : "Desktop";
+      created = { id: uid(), name: label, rootId: cloned.rootId };
+      const variants = [...existingVariants, created];
+      const variantByBreakpoint = { ...mapping, [breakpoint]: created.id };
+      const desktop = resolveComponentVariant({ ...current, variants, variantByBreakpoint }, "desktop");
+      p.components[index] = { ...current, rootId: desktop.rootId, variants, variantByBreakpoint };
+    });
+    return created;
+  },
+
+  assignComponentVariant(componentId: string, breakpoint: BreakpointId, variantId: string) {
+    doc().mutate((p) => {
+      const index = p.components.findIndex((component) => component.id === componentId);
+      if (index < 0) return;
+      const current = p.components[index];
+      const variants = componentVariants(current).map((variant) => ({ ...variant }));
+      if (!variants.some((variant) => variant.id === variantId)) return;
+      const variantByBreakpoint = { ...(current.variantByBreakpoint ?? {}), [breakpoint]: variantId };
+      const desktop = resolveComponentVariant({ ...current, variants, variantByBreakpoint }, "desktop");
+      p.components[index] = { ...current, rootId: desktop.rootId, variants, variantByBreakpoint };
+    });
+  },
+
   deleteComponent(id: string) {
     doc().mutate((p) => {
       const comp = p.components.find((c) => c.id === id);
@@ -510,7 +566,9 @@ export const docActions = {
           p.nodes[node.id] = { ...node, type: "frame", componentId: undefined, overrides: undefined, tag: "div" };
         }
       }
-      for (const subId of collectSubtree(p.nodes, comp.rootId)) delete p.nodes[subId];
+      for (const rootId of componentRootIds(comp)) {
+        for (const subId of collectSubtree(p.nodes, rootId)) delete p.nodes[subId];
+      }
       p.components = p.components.filter((c) => c.id !== id);
     });
   },

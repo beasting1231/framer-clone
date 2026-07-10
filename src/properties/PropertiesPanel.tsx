@@ -1,7 +1,7 @@
 import { docActions, useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
 import { defaultHoverEffect, ensureHoverEffect, getHoverStyles, hasHoverOverride, patchHoverStyles, resetHoverStyleKeys, resolveHoverAppearance } from "@/model/hover";
-import { nodeStyles, overriddenKeys, resolveStyles } from "@/model/resolve";
+import { nodeStyles, overriddenKeys, resolveStyles, componentRootIds, resolveComponentVariant } from "@/model/resolve";
 import type {
   BreakpointId,
   EntrancePreset,
@@ -16,6 +16,7 @@ import type {
 } from "@/model/types";
 import { NumberInput, PropRow, Segmented, ColorInput, Section } from "./controls";
 import { AlignmentBar } from "./AlignmentBar";
+import { AbsoluteAnchorPicker } from "./AbsoluteAnchorPicker";
 import { IconPlus, IconTrash } from "@/ui/icons";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -67,7 +68,7 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
   const isFrame = node.type === "frame" || node.type === "collectionList";
   const isImage = node.type === "image";
   const isInstance = node.type === "instance";
-  const isRoot = project.pages.some((p) => p.rootId === node.id) || project.components.some((c) => c.rootId === node.id);
+  const isRoot = project.pages.some((p) => p.rootId === node.id) || project.components.some((c) => componentRootIds(c).includes(node.id));
   const multi = ids.length > 1;
 
   const updateHover = (patch: Partial<HoverEffect>) => {
@@ -128,6 +129,13 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
               This layer is controlled by approved custom code. Normal editor controls are locked so they do not overwrite
               the custom implementation.
             </p>
+            {node.customCode.behaviors?.length ? (
+              <p className="muted">
+                {node.customCode.behaviors.length} scoped interaction{node.customCode.behaviors.length === 1 ? "" : "s"}: {[
+                  ...new Set(node.customCode.behaviors.map((behavior) => behavior.event)),
+                ].join(", ")}
+              </p>
+            ) : null}
             {node.customCode.note && <p className="muted">{node.customCode.note}</p>}
           </div>
         </Section>
@@ -187,9 +195,6 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
             <NumberInput value={styles.x ?? 0} unit="X" onChange={(v) => set({ x: v })} />
             <NumberInput value={styles.y ?? 0} unit="Y" onChange={(v) => set({ y: v })} />
           </PropRow>
-          <PropRow label="Rotate" overridden={ov("rotation")} onReset={() => reset("rotation")}>
-            <NumberInput value={styles.rotation ?? 0} unit="°" onChange={(v) => set({ rotation: v })} />
-          </PropRow>
           <PropRow label="Z index" overridden={ov("zIndex")} onReset={() => reset("zIndex")}>
             <NumberInput value={styles.zIndex} placeholder="auto" unit="z" onChange={(v) => set({ zIndex: v })} />
           </PropRow>
@@ -209,13 +214,32 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
           </PropRow>
           {styles.positionAbsolute && (
             <>
+              <PropRow label="Anchor" overridden={ov("pin")} onReset={() => reset("pin")}>
+                <AbsoluteAnchorPicker pin={styles.pin} onChange={(pin) => set({ pin })} />
+              </PropRow>
               <PropRow label="Top/Left" overridden={ov("pin")} onReset={() => reset("pin")}>
-                <NumberInput value={styles.pin?.top} unit="T" onChange={(v) => set({ pin: { ...styles.pin, top: v } })} />
-                <NumberInput value={styles.pin?.left} unit="L" onChange={(v) => set({ pin: { ...styles.pin, left: v } })} />
+                <NumberInput
+                  value={styles.pin?.top}
+                  unit="T"
+                  onChange={(v) => set({ pin: { ...styles.pin, top: v, bottom: undefined, centerY: undefined } })}
+                />
+                <NumberInput
+                  value={styles.pin?.left}
+                  unit="L"
+                  onChange={(v) => set({ pin: { ...styles.pin, left: v, right: undefined, centerX: undefined } })}
+                />
               </PropRow>
               <PropRow label="Bot/Right">
-                <NumberInput value={styles.pin?.bottom} unit="B" onChange={(v) => set({ pin: { ...styles.pin, bottom: v } })} />
-                <NumberInput value={styles.pin?.right} unit="R" onChange={(v) => set({ pin: { ...styles.pin, right: v } })} />
+                <NumberInput
+                  value={styles.pin?.bottom}
+                  unit="B"
+                  onChange={(v) => set({ pin: { ...styles.pin, bottom: v, top: undefined, centerY: undefined } })}
+                />
+                <NumberInput
+                  value={styles.pin?.right}
+                  unit="R"
+                  onChange={(v) => set({ pin: { ...styles.pin, right: v, left: undefined, centerX: undefined } })}
+                />
               </PropRow>
             </>
           )}
@@ -246,6 +270,39 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
         <PropRow label="Min / Max H" overridden={ov("minHeight", "maxHeight")} onReset={() => reset("minHeight", "maxHeight")}>
           <NumberInput value={styles.minHeight} placeholder="min" unit="↓" onChange={(v) => set({ minHeight: v })} />
           <NumberInput value={styles.maxHeight} placeholder="max" unit="↑" onChange={(v) => set({ maxHeight: v })} />
+        </PropRow>
+      </Section>
+
+      {/* ── transform */}
+      <Section title="Transform">
+        <PropRow label="Offset" overridden={ov("translateX", "translateY")} onReset={() => reset("translateX", "translateY")}>
+          <NumberInput value={styles.translateX ?? 0} unit="X" onChange={(v) => set({ translateX: v })} />
+          <NumberInput value={styles.translateY ?? 0} unit="Y" onChange={(v) => set({ translateY: v })} />
+        </PropRow>
+        <PropRow label="Depth" overridden={ov("translateZ")} onReset={() => reset("translateZ")}>
+          <NumberInput value={styles.translateZ ?? 0} unit="Z" onChange={(v) => set({ translateZ: v })} />
+        </PropRow>
+        <PropRow label="Rotate" overridden={ov("rotation")} onReset={() => reset("rotation")}>
+          <NumberInput value={styles.rotation ?? 0} unit="°" onChange={(v) => set({ rotation: v })} />
+        </PropRow>
+        <PropRow label="Rotate 3D" overridden={ov("rotationX", "rotationY")} onReset={() => reset("rotationX", "rotationY")}>
+          <NumberInput value={styles.rotationX ?? 0} unit="X°" onChange={(v) => set({ rotationX: v })} />
+          <NumberInput value={styles.rotationY ?? 0} unit="Y°" onChange={(v) => set({ rotationY: v })} />
+        </PropRow>
+        <PropRow label="Scale" overridden={ov("scaleX", "scaleY")} onReset={() => reset("scaleX", "scaleY")}>
+          <NumberInput value={styles.scaleX ?? 1} step={0.01} unit="X" onChange={(v) => set({ scaleX: v })} />
+          <NumberInput value={styles.scaleY ?? 1} step={0.01} unit="Y" onChange={(v) => set({ scaleY: v })} />
+        </PropRow>
+        <PropRow label="Perspective" overridden={ov("perspective")} onReset={() => reset("perspective")}>
+          <NumberInput value={styles.perspective ?? 800} min={0} unit="px" onChange={(v) => set({ perspective: v })} />
+        </PropRow>
+        <PropRow
+          label="Origin"
+          overridden={ov("transformOriginX", "transformOriginY")}
+          onReset={() => reset("transformOriginX", "transformOriginY")}
+        >
+          <NumberInput value={styles.transformOriginX ?? 50} min={0} max={100} unit="X%" onChange={(v) => set({ transformOriginX: v })} />
+          <NumberInput value={styles.transformOriginY ?? 50} min={0} max={100} unit="Y%" onChange={(v) => set({ transformOriginY: v })} />
         </PropRow>
       </Section>
 
@@ -1329,7 +1386,7 @@ function InstanceOverrides({ node, project }: { node: Node; project: SerializedP
     if (n.type === "text" || n.type === "image") targets.push(n);
     for (const c of n.children) visit(c);
   };
-  visit(comp.rootId);
+  visit(resolveComponentVariant(comp, "desktop").rootId);
   if (targets.length === 0) return null;
 
   const overrides = node.overrides ?? {};

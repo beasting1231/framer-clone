@@ -1,9 +1,17 @@
 import { create } from "zustand";
-import type { CodexMessage, CodexProgress } from "@/api/client";
+import type { CodexImageAttachment, CodexMessage, CodexProgress } from "@/api/client";
 import type { CustomCodeProposal } from "@/model/customCode";
+
+export interface CodexQueuedPrompt {
+  id: string;
+  text: string;
+  images: CodexImageAttachment[];
+}
 
 export interface CodexChatSession {
   input: string;
+  inputImages: CodexImageAttachment[];
+  promptQueue: CodexQueuedPrompt[];
   messages: CodexMessage[];
   progress: CodexProgress | null;
   pendingCustomCode: CustomCodeProposal | null;
@@ -12,6 +20,7 @@ export interface CodexChatSession {
   reasoning: string;
   speed: string;
   generation: number;
+  runId: number;
 }
 
 export type CodexAuthState = "checking" | "authenticated" | "unauthenticated" | "unavailable";
@@ -26,16 +35,70 @@ interface CodexChatState {
   resetSession: (projectId: string) => void;
 }
 
+type CodexRunSettings = Pick<CodexChatSession, "model" | "reasoning" | "speed">;
+
+const RUN_SETTINGS_STORAGE_KEY = "framer-clone.codex-run-settings";
+const DEFAULT_RUN_SETTINGS: CodexRunSettings = {
+  model: "gpt-5.6-sol",
+  reasoning: "low",
+  speed: "default",
+};
+const MODEL_CAPABILITIES: Record<string, { defaultReasoning: string; reasoning: Set<string>; fast: boolean }> = {
+  "gpt-5.6-sol": { defaultReasoning: "low", reasoning: new Set(["low", "medium", "high", "xhigh", "max", "ultra"]), fast: true },
+  "gpt-5.6-terra": { defaultReasoning: "medium", reasoning: new Set(["low", "medium", "high", "xhigh", "max", "ultra"]), fast: true },
+  "gpt-5.6-luna": { defaultReasoning: "medium", reasoning: new Set(["low", "medium", "high", "xhigh", "max"]), fast: true },
+  "gpt-5.5": { defaultReasoning: "medium", reasoning: new Set(["low", "medium", "high", "xhigh"]), fast: true },
+  "gpt-5.4-mini": { defaultReasoning: "medium", reasoning: new Set(["low", "medium", "high", "xhigh"]), fast: false },
+  "gpt-5.3-codex-spark": { defaultReasoning: "high", reasoning: new Set(["low", "medium", "high", "xhigh"]), fast: false },
+};
+
+function normalizeRunSettings(value: Partial<CodexRunSettings>): CodexRunSettings {
+  const model = value.model && MODEL_CAPABILITIES[value.model] ? value.model : DEFAULT_RUN_SETTINGS.model;
+  const capabilities = MODEL_CAPABILITIES[model];
+  const reasoning = value.reasoning && capabilities.reasoning.has(value.reasoning) ? value.reasoning : capabilities.defaultReasoning;
+  const speed = value.speed === "fast" && capabilities.fast ? "fast" : "default";
+  return { model, reasoning, speed };
+}
+
+function loadRunSettings(): CodexRunSettings {
+  if (typeof window === "undefined") return DEFAULT_RUN_SETTINGS;
+  try {
+    const saved = window.localStorage.getItem(RUN_SETTINGS_STORAGE_KEY);
+    return saved ? normalizeRunSettings(JSON.parse(saved) as Partial<CodexRunSettings>) : DEFAULT_RUN_SETTINGS;
+  } catch {
+    return DEFAULT_RUN_SETTINGS;
+  }
+}
+
+let runSettings = loadRunSettings();
+
+function saveRunSettings(patch: Partial<CodexChatSession>): CodexRunSettings | null {
+  if (patch.model === undefined && patch.reasoning === undefined && patch.speed === undefined) return null;
+  runSettings = normalizeRunSettings({
+    ...runSettings,
+    ...(patch.model !== undefined ? { model: patch.model } : {}),
+    ...(patch.reasoning !== undefined ? { reasoning: patch.reasoning } : {}),
+    ...(patch.speed !== undefined ? { speed: patch.speed } : {}),
+  });
+  try {
+    window.localStorage.setItem(RUN_SETTINGS_STORAGE_KEY, JSON.stringify(runSettings));
+  } catch {
+    // Keep the settings for this app session when persistent storage is unavailable.
+  }
+  return runSettings;
+}
+
 const emptySession = (): CodexChatSession => ({
   input: "",
+  inputImages: [],
+  promptQueue: [],
   messages: [],
   progress: null,
   pendingCustomCode: null,
   busy: false,
-  model: "gpt-5.6-sol",
-  reasoning: "low",
-  speed: "default",
+  ...runSettings,
   generation: 0,
+  runId: 0,
 });
 
 export const useCodexChat = create<CodexChatState>((set, get) => ({
@@ -53,9 +116,14 @@ export const useCodexChat = create<CodexChatState>((set, get) => ({
   },
 
   updateSession: (projectId, patch) => {
+    const savedSettings = saveRunSettings(patch);
     set((state) => {
-      const current = state.sessions[projectId] ?? emptySession();
-      return { sessions: { ...state.sessions, [projectId]: { ...current, ...patch } } };
+      const sessions = savedSettings
+        ? Object.fromEntries(Object.entries(state.sessions).map(([id, session]) => [id, { ...session, ...savedSettings }]))
+        : { ...state.sessions };
+      const current = sessions[projectId] ?? emptySession();
+      sessions[projectId] = { ...current, ...patch, ...(savedSettings ?? {}) };
+      return { sessions };
     });
   },
 
