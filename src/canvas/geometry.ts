@@ -15,7 +15,7 @@ export interface Rect {
   h: number;
 }
 
-/** World-space x offset for each breakpoint artboard (desktop first). */
+/** World-space x offset for each breakpoint artboard (widest first). */
 export function artboardX(bp: BreakpointId): number {
   let x = 0;
   for (const def of BREAKPOINTS) {

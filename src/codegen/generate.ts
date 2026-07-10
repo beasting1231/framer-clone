@@ -2,6 +2,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import prettier from "prettier";
+import type { CSSProperties } from "react";
 import {
   BREAKPOINTS,
   type BreakpointId,
@@ -129,6 +130,24 @@ function nodeCssAt(ctx: GenCtx, node: Node, bp: BreakpointId, stripPosition = fa
   return css;
 }
 
+function stackOverlapChildCssAt(ctx: GenCtx, parent: Node, childIndex: number, bp: BreakpointId): CSSProperties {
+  const parentProps = nodeStyles(parent, ctx.project, bp);
+  if (parentProps.layout !== "stack" || (parentProps.gap ?? 0) >= 0) return {};
+  let flowIndex = 0;
+  for (let index = 0; index <= childIndex; index++) {
+    const child = ctx.project.nodes[parent.children[index]];
+    if (!child) continue;
+    const childProps = nodeStyles(child, ctx.project, bp);
+    if (childProps.positionAbsolute || childProps.visible === false) continue;
+    if (index === childIndex) {
+      if (flowIndex === 0) return {};
+      return parentProps.direction === "row" ? { marginLeft: parentProps.gap } : { marginTop: parentProps.gap };
+    }
+    flowIndex++;
+  }
+  return {};
+}
+
 function collectTreeIds(ctx: GenCtx, rootId: string, out: string[] = []): string[] {
   const node = ctx.project.nodes[rootId];
   if (!node) return out;
@@ -140,6 +159,7 @@ function collectTreeIds(ctx: GenCtx, rootId: string, out: string[] = []): string
 function generateCss(ctx: GenCtx): string {
   const { project } = ctx;
   const sections: string[] = [];
+  const wideRules: string[] = [];
   const tabletRules: string[] = [];
   const phoneRules: string[] = [];
 
@@ -151,11 +171,27 @@ function generateCss(ctx: GenCtx): string {
     const cls = ctx.classNames.get(id)!;
     const strip = masterRootIds.has(id);
     const desktop = nodeCssAt(ctx, node, "desktop", strip);
+    const wide = cssDiff(desktop, nodeCssAt(ctx, node, "wide", strip));
     const tablet = cssDiff(desktop, nodeCssAt(ctx, node, "tablet", strip));
     const phone = cssDiff(nodeCssAt(ctx, node, "tablet", strip), nodeCssAt(ctx, node, "phone", strip));
     sections.push(`.${cls} {\n${cssDeclarations(desktop)}\n}`);
+    if (Object.keys(wide).length > 0) wideRules.push(`  .${cls} {\n${cssDeclarations(wide, "    ")}\n  }`);
     if (Object.keys(tablet).length > 0) tabletRules.push(`  .${cls} {\n${cssDeclarations(tablet, "    ")}\n  }`);
     if (Object.keys(phone).length > 0) phoneRules.push(`  .${cls} {\n${cssDeclarations(phone, "    ")}\n  }`);
+    // Native CSS rejects negative gap. Emit responsive margins for each
+    // subsequent in-flow stack child, matching Canvas and Preview behavior.
+    node.children.forEach((_childId, childIndex) => {
+      const selector = `.${cls} > :nth-child(${childIndex + 1})`;
+      const overlapDesktop = stackOverlapChildCssAt(ctx, node, childIndex, "desktop");
+      const overlapWide = cssDiff(overlapDesktop, stackOverlapChildCssAt(ctx, node, childIndex, "wide"));
+      const overlapTablet = cssDiff(overlapDesktop, stackOverlapChildCssAt(ctx, node, childIndex, "tablet"));
+      const tabletResolved = stackOverlapChildCssAt(ctx, node, childIndex, "tablet");
+      const overlapPhone = cssDiff(tabletResolved, stackOverlapChildCssAt(ctx, node, childIndex, "phone"));
+      if (Object.keys(overlapDesktop).length > 0) sections.push(`${selector} {\n${cssDeclarations(overlapDesktop)}\n}`);
+      if (Object.keys(overlapWide).length > 0) wideRules.push(`  ${selector} {\n${cssDeclarations(overlapWide, "    ")}\n  }`);
+      if (Object.keys(overlapTablet).length > 0) tabletRules.push(`  ${selector} {\n${cssDeclarations(overlapTablet, "    ")}\n  }`);
+      if (Object.keys(overlapPhone).length > 0) phoneRules.push(`  ${selector} {\n${cssDeclarations(overlapPhone, "    ")}\n  }`);
+    });
     // hover appearance as CSS :hover rules
     const hover = node.effects?.hover;
     if (hover) {
@@ -201,6 +237,8 @@ function generateCss(ctx: GenCtx): string {
     for (const id of collectTreeIds(ctx, page.rootId)) emitNodeCss(id);
   }
 
+  const wideBp = BREAKPOINTS.find((b) => b.id === "wide")!;
+  const desktopBp = BREAKPOINTS.find((b) => b.id === "desktop")!;
   const tabletBp = BREAKPOINTS.find((b) => b.id === "tablet")!;
   const phoneBp = BREAKPOINTS.find((b) => b.id === "phone")!;
 
@@ -212,12 +250,14 @@ function generateCss(ctx: GenCtx): string {
         .map((variant) => `  .${componentVariantClass(component.id, variant.id)} { display: none !important; }`);
     });
   const desktopVariantRules = hiddenVariantsAt("desktop");
+  const wideVariantRules = hiddenVariantsAt("wide");
   const tabletVariantRules = hiddenVariantsAt("tablet");
   const phoneVariantRules = hiddenVariantsAt("phone");
 
   let css = RESET_CSS + "\n" + sections.join("\n\n") + "\n";
-  if (desktopVariantRules.length > 0) css += `\n@media (min-width: ${BREAKPOINTS[0].minWidth}px) {\n${desktopVariantRules.join("\n")}\n}\n`;
-  // Responsive styles retain the existing desktop -> tablet -> phone cascade.
+  if (desktopVariantRules.length > 0) css += `\n@media (min-width: ${desktopBp.minWidth}px) and (max-width: ${desktopBp.maxWidth}px) {\n${desktopVariantRules.join("\n")}\n}\n`;
+  if (wideRules.length > 0 || wideVariantRules.length > 0) css += `\n@media (min-width: ${wideBp.minWidth}px) {\n${[...wideRules, ...wideVariantRules].join("\n\n")}\n}\n`;
+  // Tablet and phone retain the existing downward cascade from desktop.
   if (tabletRules.length > 0) css += `\n@media (max-width: ${tabletBp.maxWidth}px) {\n${tabletRules.join("\n\n")}\n}\n`;
   if (tabletVariantRules.length > 0) css += `\n@media (min-width: ${tabletBp.minWidth}px) and (max-width: ${tabletBp.maxWidth}px) {\n${tabletVariantRules.join("\n")}\n}\n`;
   if (phoneRules.length > 0 || phoneVariantRules.length > 0) css += `\n@media (max-width: ${phoneBp.maxWidth}px) {\n${[...phoneRules, ...phoneVariantRules].join("\n\n")}\n}\n`;
@@ -906,7 +946,7 @@ npm run build   # production build → dist/
 - \`src/pages/\` — one component per page
 - \`src/components/\` — reusable components created in the editor
 - \`src/cms/data.ts\` — CMS collections exported as typed data
-- \`src/styles.css\` — all styling, with media queries for tablet/phone breakpoints
+- \`src/styles.css\` — all styling, with media queries for wide/tablet/phone breakpoints
 
 This folder is regenerated on every save in the editor, so manual edits here will be overwritten. Edit the design in the editor instead (the source of truth is \`../framer.json\`).
 `;

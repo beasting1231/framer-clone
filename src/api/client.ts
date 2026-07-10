@@ -10,6 +10,7 @@ export interface CodexMessage {
   role: "user" | "assistant";
   text: string;
   images?: CodexImageAttachment[];
+  contextNodes?: Array<{ id: string; label: string }>;
 }
 
 export interface CodexImageAttachment {
@@ -40,6 +41,52 @@ export interface CodexSendResult {
   unauthenticated?: boolean;
   requiresCustomCodeApproval?: boolean;
   customCodeProposal?: CustomCodeProposal;
+}
+
+export interface ProductionPreviewResult {
+  ok: true;
+  url: string;
+  revision: string;
+  reused: boolean;
+}
+
+export interface PublishResult {
+  ok: true;
+  provider: "cloudflare-pages";
+  projectName: string;
+  url: string;
+  pagesUrl: string;
+  deploymentUrl: string;
+  publishedAt: string;
+  revision: string;
+}
+
+export type UnsplashResolution = "small" | "regular" | "full";
+
+export interface UnsplashPhoto {
+  id: string;
+  description: string;
+  width: number;
+  height: number;
+  color: string;
+  urls: { thumb: string; small: string; regular: string; full: string };
+  links: { html: string; downloadLocation: string };
+  user: { name: string; username: string; profileUrl: string };
+}
+
+export interface UnsplashAsset {
+  file: string;
+  name: string;
+  width: number;
+  height: number;
+  source: "unsplash";
+  attribution: {
+    provider: "Unsplash";
+    photoId: string;
+    photoUrl: string;
+    photographerName: string;
+    photographerUrl: string;
+  };
 }
 
 const API_FALLBACK_ORIGIN = "http://localhost:4570";
@@ -112,8 +159,28 @@ export const api = {
   deleteAsset: (projectId: string, file: string) =>
     request<{ ok: true }>(`/api/projects/${projectId}/assets/${encodeURIComponent(file)}`, { method: "DELETE" }),
 
+  searchUnsplash: (query: string, page = 1) =>
+    request<{ ok: true; results: UnsplashPhoto[]; total: number; totalPages: number }>(
+      `/api/unsplash/search?query=${encodeURIComponent(query)}&page=${page}`,
+    ),
+
+  importUnsplash: (projectId: string, photoId: string, resolution: UnsplashResolution) =>
+    request<{ ok: true; asset: UnsplashAsset }>(`/api/projects/${projectId}/assets/unsplash`, {
+      method: "POST",
+      body: JSON.stringify({ photoId, resolution }),
+    }),
+
+  buildProductionPreview: (projectId: string) =>
+    request<ProductionPreviewResult>(`/api/projects/${projectId}/preview-build`, { method: "POST" }),
+
+  confirmProductionPreview: (projectId: string, revision: string) =>
+    request<{ ok: true }>(`/api/projects/${projectId}/preview-confirm`, {
+      method: "POST",
+      body: JSON.stringify({ revision }),
+    }),
+
   publish: (projectId: string) =>
-    request<{ ok: true; dir: string; output: string }>(`/api/projects/${projectId}/publish`, { method: "POST" }),
+    request<PublishResult>(`/api/projects/${projectId}/publish`, { method: "POST" }),
 
   codexStatus: () => request<{ ok: boolean; authenticated: boolean; output: string }>("/api/codex/status"),
 

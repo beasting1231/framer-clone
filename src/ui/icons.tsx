@@ -145,6 +145,13 @@ export const IconDesktop = (p: SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+export const IconWide = (p: SVGProps<SVGSVGElement>) => (
+  <svg {...base(p)}>
+    <rect x="0.75" y="3" width="14.5" height="8" rx="1" />
+    <path d="M5.5 13.5h5M8 11v2.5" />
+  </svg>
+);
+
 export const IconTablet = (p: SVGProps<SVGSVGElement>) => (
   <svg {...base(p)}>
     <rect x="3" y="1.5" width="10" height="13" rx="1.5" />

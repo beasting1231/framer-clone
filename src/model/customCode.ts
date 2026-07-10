@@ -47,6 +47,11 @@ export function validateCustomCodeProposal(value: CustomCodeProposal): string[] 
   return errors;
 }
 
+export function customCodeProposalHasAnimation(value: CustomCodeProposal): boolean {
+  if (value.behaviors?.some((behavior) => behavior.actions.some((action) => action.type === "animate"))) return true;
+  return /@(?:-webkit-)?keyframes\b|(?:^|[;{])\s*(?:-webkit-)?(?:animation|transition)(?:-[a-z-]+)?\s*:/i.test(value.css || "");
+}
+
 export function customCodeScopeSelector(nodeId: string): string {
   return `[data-custom-code-node="${cssStringEscape(nodeId)}"]`;
 }

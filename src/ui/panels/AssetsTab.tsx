@@ -5,6 +5,7 @@ import type { Fill } from "@/model/types";
 import { docActions, useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
 import { IconPlus, IconTrash, IconUpload } from "../icons";
+import { UnsplashPicker } from "./UnsplashPicker";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Assets tab: uploaded images (stored in projects/<id>/assets/ on disk),
@@ -119,6 +120,15 @@ export function AssetsTab() {
           );
         })}
       </div>
+
+      <UnsplashPicker
+        projectId={project.meta.id}
+        onImported={(asset) => {
+          docActions.addAsset(asset);
+          const url = `/project-assets/${project.meta.id}/${asset.file}`;
+          if (useEditor.getState().assetPick) applyAsset(url);
+        }}
+      />
 
       <div className="panel-section-title" style={{ marginTop: 18 }}>
         Color styles

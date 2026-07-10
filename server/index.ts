@@ -4,18 +4,25 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
 import { buildCtx, generateSite } from "../src/codegen/generate";
 import { emitThumbnailHtml } from "../src/codegen/thumbnailHtml";
 import { hashProject } from "../src/model/projectHash";
 import type { SerializedProject } from "../src/model/types";
 import { backfillMissingThumbnails, copyThumbnail, hasThumbnail, scheduleThumbnail, thumbnailPath } from "./thumbnail";
 import { createCodexRouter, streamCodexProgress } from "./codex";
+import { deployProductionBuild } from "./cloudflare";
+import {
+  confirmProductionPreview,
+  ensureProductionBuild,
+  ensureProductionPreviewServer,
+  wasProductionBuildPreviewed,
+} from "./siteBuild";
+import { importUnsplashPhoto, searchUnsplash, type UnsplashResolution } from "./unsplash";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..");
 const PROJECTS_DIR = path.join(ROOT, "projects");
-const PORT = 4570;
+const PORT = Number(process.env.PORT || 4570);
 
 fs.mkdirSync(PROJECTS_DIR, { recursive: true });
 
@@ -166,6 +173,37 @@ app.delete("/api/projects/:id", async (req, res) => {
 
 // ── Assets ───────────────────────────────────────────────────────────────────
 
+app.get("/api/unsplash/search", async (req, res) => {
+  const query = String(req.query.query || "").trim();
+  const page = Number.parseInt(String(req.query.page || "1"), 10) || 1;
+  try {
+    res.json({ ok: true, ...(await searchUnsplash(ROOT, query, page, 18)) });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+app.post("/api/projects/:id/assets/unsplash", async (req, res) => {
+  if (!(await readProject(req.params.id))) return res.status(404).json({ error: "not found" });
+  const photoId = String((req.body as { photoId?: string }).photoId || "").trim();
+  const requestedResolution = String((req.body as { resolution?: string }).resolution || "regular");
+  const resolution: UnsplashResolution = ["small", "regular", "full"].includes(requestedResolution)
+    ? (requestedResolution as UnsplashResolution)
+    : "regular";
+  if (!photoId) return res.status(400).json({ error: "Missing Unsplash photo ID." });
+  try {
+    const asset = await importUnsplashPhoto({
+      rootDir: ROOT,
+      projectDir: projectDir(req.params.id),
+      photoId,
+      resolution,
+    });
+    res.json({ ok: true, asset });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
 app.post("/api/projects/:id/assets", async (req, res) => {
   const { name, dataUrl } = req.body as { name: string; dataUrl: string };
   const match = /^data:([^;]+);base64,(.+)$/.exec(dataUrl);
@@ -216,34 +254,48 @@ app.get("/project-thumbnails/:id", (req, res) => {
   res.sendFile(file);
 });
 
-// ── Publish (production build of the generated site) ────────────────────────
+// ── Production preview + Cloudflare publish ─────────────────────────────────
+
+app.post("/api/projects/:id/preview-build", async (req, res) => {
+  const project = await readProject(req.params.id);
+  if (!project) return res.status(404).json({ error: "not found" });
+  try {
+    const build = await ensureProductionBuild(req.params.id, project, projectDir(req.params.id));
+    const url = await ensureProductionPreviewServer(req.params.id, build.dir);
+    res.json({ ok: true, url, revision: build.revision, reused: build.reused });
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
+app.post("/api/projects/:id/preview-confirm", async (req, res) => {
+  const revision = String((req.body as { revision?: string }).revision || "");
+  if (!revision || !confirmProductionPreview(req.params.id, revision)) {
+    return res.status(409).json({ error: "This production preview is no longer current." });
+  }
+  res.json({ ok: true });
+});
 
 app.post("/api/projects/:id/publish", async (req, res) => {
   const project = await readProject(req.params.id);
   if (!project) return res.status(404).json({ error: "not found" });
-  await writeProjectToDisk(req.params.id, project);
-  const siteDir = path.join(projectDir(req.params.id), "site");
-
-  const run = (cmd: string, args: string[]) =>
-    new Promise<{ code: number; output: string }>((resolve) => {
-      const child = spawn(cmd, args, { cwd: siteDir, shell: process.platform === "win32" });
-      let output = "";
-      child.stdout.on("data", (d) => (output += d.toString()));
-      child.stderr.on("data", (d) => (output += d.toString()));
-      child.on("close", (code) => resolve({ code: code ?? 1, output }));
-    });
-
-  if (!fs.existsSync(path.join(siteDir, "node_modules"))) {
-    const install = await run("npm", ["install", "--no-fund", "--no-audit"]);
-    if (install.code !== 0) {
-      return res.status(500).json({ error: "npm install failed", output: install.output.slice(-4000) });
+  try {
+    const dir = projectDir(req.params.id);
+    const build = await ensureProductionBuild(req.params.id, project, dir);
+    if (!wasProductionBuildPreviewed(req.params.id, build.revision)) {
+      return res.status(409).json({ error: "Preview the current version before publishing. Only the version you inspected can be deployed." });
     }
+    const result = await deployProductionBuild({
+      rootDir: ROOT,
+      projectDir: dir,
+      projectId: req.params.id,
+      projectName: project.meta.name,
+      build,
+    });
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: (error as Error).message });
   }
-  const build = await run("npm", ["run", "build"]);
-  if (build.code !== 0) {
-    return res.status(500).json({ error: "build failed", output: build.output.slice(-4000) });
-  }
-  res.json({ ok: true, dir: path.join(siteDir, "dist"), output: build.output.slice(-2000) });
 });
 
 // serve published builds for preview

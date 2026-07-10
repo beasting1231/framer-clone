@@ -19,9 +19,10 @@ import {
   IconTablet,
   IconText,
   IconUndo,
+  IconWide,
 } from "./icons";
 
-const BP_ICONS = { desktop: IconDesktop, tablet: IconTablet, phone: IconPhone };
+const BP_ICONS = { wide: IconWide, desktop: IconDesktop, tablet: IconTablet, phone: IconPhone };
 
 function TimelineButton() {
   const open = useTimeline((s) => s.open);
@@ -59,7 +60,7 @@ export function Toolbar() {
     try {
       await useDocument.getState().flushSave();
       const result = await api.publish(project.meta.id);
-      s.setPublishState({ status: "done", message: result.dir });
+      s.setPublishState({ status: "done", message: result.url });
     } catch (err) {
       s.setPublishState({ status: "error", message: String((err as Error).message ?? err) });
     }
@@ -158,25 +159,25 @@ export function Toolbar() {
             <h3>Publish</h3>
             {publishState.status === "building" && (
               <p className="muted" style={{ lineHeight: 1.6 }}>
-                Building production site… this runs <code>npm install</code> +<code> vite build</code> in the project's{" "}
-                <code>site/</code> folder. First build can take a minute.
+                Deploying the production build you verified in Preview to Cloudflare Pages…
               </p>
             )}
             {publishState.status === "done" && (
               <div style={{ lineHeight: 1.7, fontSize: 12 }}>
-                <p style={{ color: "var(--accent)", fontWeight: 600 }}>Build succeeded.</p>
-                <p className="muted">Deployable static build written to:</p>
+                <p style={{ color: "var(--accent)", fontWeight: 600 }}>Website published.</p>
+                <p className="muted">Live on Cloudflare Pages:</p>
                 <p style={{ wordBreak: "break-all", background: "var(--bg-2)", padding: 8, borderRadius: 6, marginTop: 6 }}>
-                  {publishState.message}
+                  <a href={publishState.message} target="_blank" rel="noreferrer">{publishState.message}</a>
                 </p>
-                <p className="muted" style={{ marginTop: 10 }}>
-                  The full React source lives in <code>projects/{project.meta.id}/site/</code> — open it in any code editor.
-                </p>
+                <div className="modal-actions" style={{ marginTop: 10 }}>
+                  <button className="btn" onClick={() => void navigator.clipboard.writeText(publishState.message ?? "")}>Copy URL</button>
+                  <button className="btn primary" onClick={() => window.open(publishState.message, "_blank")}>Open website</button>
+                </div>
               </div>
             )}
             {publishState.status === "error" && (
               <div style={{ lineHeight: 1.6, fontSize: 12 }}>
-                <p style={{ color: "var(--danger)", fontWeight: 600 }}>Build failed</p>
+                <p style={{ color: "var(--danger)", fontWeight: 600 }}>Publish failed</p>
                 <pre style={{ whiteSpace: "pre-wrap", background: "var(--bg-2)", padding: 8, borderRadius: 6, marginTop: 6, maxHeight: 200, overflow: "auto" }}>
                   {publishState.message}
                 </pre>

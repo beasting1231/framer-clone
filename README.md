@@ -33,10 +33,10 @@ The `site/` folder is a standalone app: `cd projects/<name>/site && npm install 
 
 ## Editor overview
 
-- **Canvas** — one artboard per breakpoint (desktop 1200 / tablet 810 / phone 390). Scroll to pan, `⌘`+scroll to zoom, space-drag to pan. Click to select, double-click to drill in or edit text, drag to move with snapping, right-click for the context menu.
+- **Canvas** — one artboard per breakpoint (wide 1728 / desktop 1200 / tablet 810 / phone 390). Scroll to pan, `⌘`+scroll to zoom, space-drag to pan. Click to select, double-click to drill in or edit text, drag to move with snapping, right-click for the context menu.
 - **Left panel** — Pages, Layers (drag to reorder/reparent, rename, hide, lock), Assets (images, color styles, text styles), CMS, and Insert (primitives + prebuilt sections).
 - **Right panel** — all properties of the selection: position, size modes (fixed/fill/relative/fit), stack & grid layout, fills & gradients, borders, radius, shadows, blur, typography, links, effects.
-- **Breakpoints** — design desktop-first; edits at tablet/phone become overrides (blue dot in the panel, click to reset).
+- **Breakpoints** — design desktop-first; edits at wide/tablet/phone become overrides (blue dot in the panel, click to reset).
 - **Components** — right-click a frame → Create Component. Purple = component. Double-click an instance to edit the master; all instances update.
 - **CMS** — create collections with typed fields and entries, drop a collection list on a page, bind text/images to fields, and generate detail pages at `/collection/:slug`.
 - **Effects** — entrance animations (on load or on scroll), hover and press states, powered by Framer Motion in preview and in the generated code.
@@ -50,7 +50,7 @@ The `site/` folder is a standalone app: `cd projects/<name>/site && npm install 
 | --- | --- |
 | `V` / `F` / `S` / `T` / `H` | Select / Frame / Stack / Text / Hand tools |
 | `I` | Insert panel |
-| `1` / `2` / `3` | Desktop / Tablet / Phone breakpoint |
+| `1` / `2` / `3` / `4` | Desktop / Tablet / Phone / Wide breakpoint |
 | `⌘Z` / `⇧⌘Z` | Undo / Redo |
 | `⌘C` `⌘X` `⌘V` `⌘D` | Copy / Cut / Paste / Duplicate |
 | `⌘⏎` | Wrap selection in a stack |

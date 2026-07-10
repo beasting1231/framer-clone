@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { useEditor } from "@/store/editor";
 
-export type PreviewWidthMode = "full" | "desktop" | "tablet" | "phone" | "custom";
+export type PreviewWidthMode = "full" | "wide" | "desktop" | "tablet" | "phone" | "custom";
 
 function isTypingTarget(target: EventTarget | null) {
   const el = target as HTMLElement | null;
@@ -45,6 +45,7 @@ export function usePreviewShortcuts(opts: {
         Digit2: "desktop",
         Digit3: "tablet",
         Digit4: "phone",
+        Digit5: "wide",
       };
       const nextWidth = widthByDigit[e.code];
       if (nextWidth) {

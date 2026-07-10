@@ -1,5 +1,5 @@
 import { createElement, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
-import { BREAKPOINTS, type BreakpointId, type CmsCollection, type CmsEntry, type InstanceOverride, type Node, type Page, type SerializedProject } from "@/model/types";
+import { BREAKPOINTS, type BreakpointId, type CmsCollection, type CmsEntry, type InstanceOverride, type Node, type Page, type SerializedProject, type StyleProps } from "@/model/types";
 import { buildClipMotionMap } from "@/model/animation";
 import { getHoverStyles } from "@/model/hover";
 import { nodeStyles, resolveComponentVariant } from "@/model/resolve";
@@ -8,7 +8,7 @@ import type { CustomCodeBlock } from "@/model/types";
 import { useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
 import { CustomCodeContent, useCustomBehaviorHost } from "@/ui/CustomCodeRuntime";
-import { IconClose, IconDesktop, IconFullWidth, IconPhone, IconRefresh, IconTablet } from "@/ui/icons";
+import { IconClose, IconDesktop, IconFullWidth, IconPhone, IconRefresh, IconTablet, IconWide } from "@/ui/icons";
 import { PreviewMotion } from "./PreviewMotion";
 import { usePreviewShortcuts, type PreviewWidthMode } from "./usePreviewShortcuts";
 
@@ -36,6 +36,21 @@ function bindingValue(node: Node, env: PreviewEnv): string | null {
   if (!node.binding || !env.cmsEntry) return null;
   const v = env.cmsEntry.entry.values[node.binding.fieldId];
   return v === undefined ? null : String(v);
+}
+
+function childContexts(childIds: string[], parentProps: StyleProps, env: PreviewEnv): CssContext[] {
+  let flowIndex = 0;
+  return childIds.map((childId) => {
+    const child = env.project.nodes[childId];
+    const childProps = child ? nodeStyles(child, env.project, env.breakpoint) : null;
+    const index = childProps && !childProps.positionAbsolute && childProps.visible !== false ? flowIndex++ : undefined;
+    return {
+      parentLayout: parentProps.layout ?? "absolute",
+      parentDirection: parentProps.direction ?? "column",
+      parentGap: parentProps.gap ?? 0,
+      flowIndex: index,
+    };
+  });
 }
 
 function detailPath(project: SerializedProject, collectionId: string, slug: string): string | null {
@@ -170,7 +185,7 @@ function PreviewNode({ id, env, parentCtx }: { id: string; env: PreviewEnv; pare
   if (override?.fill?.type === "solid") style = { ...style, backgroundColor: override.fill.color };
   if (override?.color) style = { ...style, color: override.color };
 
-  const childCtx: CssContext = { parentLayout: props.layout ?? "absolute", parentDirection: props.direction ?? "column" };
+  const childCtx: CssContext = { parentLayout: props.layout ?? "absolute", parentDirection: props.direction ?? "column", parentGap: props.gap ?? 0 };
   const link = linkProps(node, env);
   const clipAnim = env.clipMotion?.[id];
   let anim = clipAnim ? { ...motionFor(node, true), ...clipAnim } : motionFor(node);
@@ -221,11 +236,13 @@ function PreviewNode({ id, env, parentCtx }: { id: string; env: PreviewEnv; pare
       const masterProps = nodeStyles(masterRoot, env.project, env.breakpoint);
       const masterStyle = stylesToCss(masterProps, masterRoot, { parentLayout: "stack", parentDirection: "column" }) as CSSProperties;
       const innerCtx: CssContext = { parentLayout: masterProps.layout ?? "absolute", parentDirection: masterProps.direction ?? "column" };
+      const innerEnv = { ...env, overrides: node.overrides ?? {} };
+      const innerChildContexts = childContexts(masterRoot.children, masterProps, innerEnv);
       const merged: CSSProperties = { ...masterStyle, position: style.position, left: style.left, top: style.top, width: style.width ?? masterStyle.width, height: style.height ?? masterStyle.height };
       return (
         <div style={merged}>
-          {masterRoot.children.map((c) => (
-            <PreviewNode key={c} id={c} env={{ ...env, overrides: node.overrides ?? {} }} parentCtx={innerCtx} />
+          {masterRoot.children.map((c, index) => (
+            <PreviewNode key={c} id={c} env={innerEnv} parentCtx={innerChildContexts[index] ?? innerCtx} />
           ))}
         </div>
       );
@@ -246,7 +263,8 @@ function PreviewNode({ id, env, parentCtx }: { id: string; env: PreviewEnv; pare
       );
     }
     default: {
-      const children: ReactNode = node.children.map((c) => <PreviewNode key={c} id={c} env={env} parentCtx={childCtx} />);
+      const contexts = childContexts(node.children, props, env);
+      const children: ReactNode = node.children.map((c, index) => <PreviewNode key={c} id={c} env={env} parentCtx={contexts[index] ?? childCtx} />);
       if (node.tag === "input") return <input style={style} placeholder={node.placeholder} type={node.inputType ?? "text"} />;
       if (node.tag === "textarea") return <textarea style={style} placeholder={node.placeholder} />;
       const frameStyle = { ...style, ...link.style };
@@ -283,7 +301,7 @@ function matchRoute(project: SerializedProject, path: string): { page: Page; cms
   return null;
 }
 
-const BP_ICONS = { desktop: IconDesktop, tablet: IconTablet, phone: IconPhone } as const;
+const BP_ICONS = { wide: IconWide, desktop: IconDesktop, tablet: IconTablet, phone: IconPhone } as const;
 
 const MIN_PREVIEW_WIDTH = 280;
 const MAX_PREVIEW_WIDTH = 4800;
@@ -294,10 +312,12 @@ function clampPreviewWidth(width: number) {
 
 /** Pick responsive styles from the effective preview width. */
 function breakpointForWidth(width: number): BreakpointId {
+  const wide = BREAKPOINTS.find((breakpoint) => breakpoint.id === "wide")!;
   const phone = BREAKPOINTS.find((breakpoint) => breakpoint.id === "phone")!;
   const tablet = BREAKPOINTS.find((breakpoint) => breakpoint.id === "tablet")!;
   if (phone.maxWidth !== null && width <= phone.maxWidth) return "phone";
   if (tablet.maxWidth !== null && width <= tablet.maxWidth) return "tablet";
+  if (wide.minWidth !== null && width >= wide.minWidth) return "wide";
   return "desktop";
 }
 
@@ -384,6 +404,7 @@ export function PreviewMode() {
   const root = route ? project.nodes[route.page.rootId] : null;
   const rootProps = root ? nodeStyles(root, project, breakpoint) : null;
   const rootStyle = root && rootProps ? (stylesToCss(rootProps, root, { parentLayout: "stack", parentDirection: "column" }) as CSSProperties) : {};
+  const rootChildContexts = root && rootProps ? childContexts(root.children, rootProps, env) : [];
 
   const commitWidthDraft = () => {
     const parsed = parseInt(widthDraft, 10);
@@ -452,7 +473,7 @@ export function PreviewMode() {
             {BREAKPOINTS.map((bp) => {
               const Icon = BP_ICONS[bp.id];
               const shortcut =
-                bp.id === "desktop" ? "⌥2" : bp.id === "tablet" ? "⌥3" : bp.id === "phone" ? "⌥4" : undefined;
+                bp.id === "desktop" ? "⌥2" : bp.id === "tablet" ? "⌥3" : bp.id === "phone" ? "⌥4" : bp.id === "wide" ? "⌥5" : undefined;
               return (
                 <button
                   key={bp.id}
@@ -499,12 +520,12 @@ export function PreviewMode() {
           <div className="preview-frame" ref={scrollRootRef}>
             {root ? (
               <div key={refreshKey} style={{ ...rootStyle, position: "relative", width: "100%", minHeight: "100%" }}>
-                {root.children.map((c) => (
+                {root.children.map((c, index) => (
                   <PreviewNode
                     key={c}
                     id={c}
                     env={env}
-                    parentCtx={{ parentLayout: rootProps?.layout ?? "stack", parentDirection: rootProps?.direction ?? "column" }}
+                    parentCtx={rootChildContexts[index] ?? { parentLayout: rootProps?.layout ?? "stack", parentDirection: rootProps?.direction ?? "column", parentGap: rootProps?.gap ?? 0 }}
                   />
                 ))}
               </div>

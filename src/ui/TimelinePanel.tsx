@@ -615,11 +615,13 @@ function TimelineDrawer() {
                   }}
                 />
               </div>
-              <span className="muted tl-label">Easing</span>
+              <span className="muted tl-label">Easing to next</span>
               <select
                 className="prop-input small"
                 style={{ width: 110 }}
                 value={selectedKf.kf.easing}
+                disabled={selectedKf.track.keyframes[selectedKf.track.keyframes.length - 1]?.id === selectedKf.kf.id}
+                title={selectedKf.track.keyframes[selectedKf.track.keyframes.length - 1]?.id === selectedKf.kf.id ? "The last keyframe has no following segment to ease" : "Controls the segment from this keyframe to the next"}
                 onChange={(e) => {
                   docActions.updateKeyframe(clip.id, selectedKf.track.id, selectedKf.kf.id, { easing: e.target.value as AnimEasing });
                   tl.refresh();

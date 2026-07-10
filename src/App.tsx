@@ -3,7 +3,7 @@ import { useEditor } from "@/store/editor";
 import { useDocument } from "@/store/document";
 import { ProjectPicker } from "@/ui/ProjectPicker";
 import { EditorShell } from "@/ui/EditorShell";
-import { PreviewMode } from "@/preview/PreviewMode";
+import { ProductionPreviewMode } from "@/preview/ProductionPreviewMode";
 
 function isTypingTarget(target: EventTarget | null) {
   const el = target as HTMLElement | null;
@@ -34,6 +34,6 @@ export default function App() {
   usePreviewToggle();
 
   if (screen === "picker" || !project) return <ProjectPicker />;
-  if (screen === "preview") return <PreviewMode />;
+  if (screen === "preview") return <ProductionPreviewMode />;
   return <EditorShell />;
 }

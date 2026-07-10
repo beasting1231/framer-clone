@@ -11,6 +11,6 @@ npm run build   # production build → dist/
 - `src/pages/` — one component per page
 - `src/components/` — reusable components created in the editor
 - `src/cms/data.ts` — CMS collections exported as typed data
-- `src/styles.css` — all styling, with media queries for tablet/phone breakpoints
+- `src/styles.css` — all styling, with media queries for wide/tablet/phone breakpoints
 
 This folder is regenerated on every save in the editor, so manual edits here will be overwritten. Edit the design in the editor instead (the source of truth is `../framer.json`).

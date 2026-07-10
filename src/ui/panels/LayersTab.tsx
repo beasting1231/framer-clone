@@ -223,7 +223,7 @@ function LayerRow(props: {
       </div>
       {isOpen &&
         hasChildren &&
-        [...node.children].reverse().map((childId) => (
+        node.children.map((childId) => (
           <LayerRow key={childId} {...props} id={childId} depth={depth + 1} />
         ))}
     </div>

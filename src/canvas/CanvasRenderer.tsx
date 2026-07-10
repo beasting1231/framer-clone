@@ -1,5 +1,6 @@
 import { memo, useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
-import type { BreakpointId, CmsCollection, CmsEntry, InstanceOverride, Node, SerializedProject } from "@/model/types";
+import type { BreakpointId, CmsCollection, CmsEntry, InstanceOverride, Node, SerializedProject, StyleProps } from "@/model/types";
+import { finalFrameStylesForPage } from "@/model/animation";
 import { resolveHoverAppearance } from "@/model/hover";
 import { ancestorChain, nodeStyles, resolveComponentVariant } from "@/model/resolve";
 import { stylesToCss, type CssContext } from "@/model/css";
@@ -23,12 +24,30 @@ export interface RenderEnv {
   cmsEntry?: { collection: CmsCollection; entry: CmsEntry } | null;
   /** ghost copies (extra CMS cards) are non-interactive */
   ghost?: boolean;
+  /** editor canvas renders entrance animations at their completed state */
+  finalAnimationStyles?: Record<string, CSSProperties>;
 }
 
 function bindingValue(node: Node, env: RenderEnv): string | null {
   if (!node.binding || !env.cmsEntry) return null;
   const value = env.cmsEntry.entry.values[node.binding.fieldId];
   return value === undefined ? null : String(value);
+}
+
+function childContexts(childIds: string[], parentProps: StyleProps, env: RenderEnv): CssContext[] {
+  let flowIndex = 0;
+  return childIds.map((childId) => {
+    const child = env.project.nodes[childId];
+    const childProps = child ? nodeStyles(child, env.project, env.breakpoint) : null;
+    const index = childProps && !childProps.positionAbsolute && childProps.visible !== false ? flowIndex++ : undefined;
+    return {
+      parentLayout: parentProps.layout ?? "absolute",
+      parentDirection: parentProps.direction ?? "column",
+      parentGap: parentProps.gap ?? 0,
+      flowIndex: index,
+      editor: true,
+    };
+  });
 }
 
 function EditableText({ node, env, style, hit }: { node: Node; env: RenderEnv; style: CSSProperties; hit: string }) {
@@ -76,6 +95,24 @@ function EditableText({ node, env, style, hit }: { node: Node; env: RenderEnv; s
           }
           if (e.key === "Escape") (e.target as HTMLElement).blur();
         }}
+        onPaste={(e) => {
+          e.preventDefault();
+          const text = e.clipboardData.getData("text/plain");
+          const target = e.currentTarget;
+          const selection = target.ownerDocument.defaultView?.getSelection();
+          if (!selection || selection.rangeCount === 0) return;
+
+          const range = selection.getRangeAt(0);
+          if (!target.contains(range.commonAncestorContainer)) return;
+
+          range.deleteContents();
+          const textNode = target.ownerDocument.createTextNode(text);
+          range.insertNode(textNode);
+          range.setStartAfter(textNode);
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {text}
@@ -109,6 +146,8 @@ export const RenderNode = memo(function RenderNode({ id, env, parentCtx }: { id:
       ? resolveHoverAppearance(node, env.project, env.breakpoint, node.effects.hover)
       : nodeStyles(node, env.project, env.breakpoint);
   let style = stylesToCss(props, node, { ...parentCtx, editor: true }) as CSSProperties;
+  const finalAnimationStyle = env.finalAnimationStyles?.[id];
+  if (finalAnimationStyle) style = { ...style, ...finalAnimationStyle };
   if (showHoverPreview && node.effects?.hover) {
     const h = node.effects.hover;
     const transforms: string[] = [];
@@ -126,6 +165,7 @@ export const RenderNode = memo(function RenderNode({ id, env, parentCtx }: { id:
   const childCtx: CssContext = {
     parentLayout: props.layout ?? "absolute",
     parentDirection: props.direction ?? "column",
+    parentGap: props.gap ?? 0,
     editor: true,
   };
 
@@ -137,6 +177,7 @@ export const RenderNode = memo(function RenderNode({ id, env, parentCtx }: { id:
         html={node.customCode.html}
         css={node.customCode.css}
         behaviors={node.customCode.behaviors}
+        editor
         style={style}
       />
     );
@@ -192,12 +233,14 @@ export const RenderNode = memo(function RenderNode({ id, env, parentCtx }: { id:
       const innerCtx: CssContext = {
         parentLayout: masterProps.layout ?? "absolute",
         parentDirection: masterProps.direction ?? "column",
+        parentGap: masterProps.gap ?? 0,
         editor: true,
       };
+      const innerChildContexts = childContexts(masterRoot.children, masterProps, innerEnv);
       return (
         <div data-node-id={hit} data-instance="true" style={{ ...style, ...pickLayoutFree(masterStyle), position: style.position, left: style.left, top: style.top, width: style.width ?? masterStyle.width, height: style.height ?? masterStyle.height }}>
-          {masterRoot.children.map((c) => (
-            <RenderNode key={c} id={c} env={innerEnv} parentCtx={innerCtx} />
+          {masterRoot.children.map((c, index) => (
+            <RenderNode key={c} id={c} env={innerEnv} parentCtx={innerChildContexts[index] ?? innerCtx} />
           ))}
         </div>
       );
@@ -232,7 +275,8 @@ export const RenderNode = memo(function RenderNode({ id, env, parentCtx }: { id:
 
     default: {
       // frame
-      const children: ReactNode = node.children.map((c) => <RenderNode key={c} id={c} env={env} parentCtx={childCtx} />);
+      const contexts = childContexts(node.children, props, env);
+      const children: ReactNode = node.children.map((c, index) => <RenderNode key={c} id={c} env={env} parentCtx={contexts[index] ?? childCtx} />);
       if (node.tag === "input") {
         return <input data-node-id={hit} style={style} placeholder={node.placeholder} readOnly />;
       }
@@ -259,16 +303,23 @@ export function ArtboardContent({ rootId, breakpoint, cmsPreviewEntry }: { rootI
   if (!project) return null;
   const root = project.nodes[rootId];
   if (!root) return null;
-  const env: RenderEnv = { project, breakpoint, cmsEntry: cmsPreviewEntry ?? null };
+  const page = project.pages.find((candidate) => candidate.rootId === rootId);
+  const env: RenderEnv = {
+    project,
+    breakpoint,
+    cmsEntry: cmsPreviewEntry ?? null,
+    finalAnimationStyles: page ? finalFrameStylesForPage(project, page.id) : {},
+  };
   const props = nodeStyles(root, project, breakpoint);
   const style = stylesToCss(props, root, { parentLayout: "stack", parentDirection: "column", editor: true }) as CSSProperties;
   // root fills the artboard; artboard supplies width
   const rootStyle: CSSProperties = { ...style, position: "relative", width: "100%", left: undefined, top: undefined };
   const childCtx: CssContext = { parentLayout: props.layout ?? "stack", parentDirection: props.direction ?? "column", editor: true };
+  const contexts = childContexts(root.children, props, env);
   return (
     <div className="artboard-content" data-node-id={rootId} style={rootStyle}>
-      {root.children.map((c) => (
-        <RenderNode key={c} id={c} env={env} parentCtx={childCtx} />
+      {root.children.map((c, index) => (
+        <RenderNode key={c} id={c} env={env} parentCtx={contexts[index] ?? childCtx} />
       ))}
     </div>
   );

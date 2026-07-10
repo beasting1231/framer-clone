@@ -4,7 +4,7 @@
 // A project is stored on disk as projects/<id>/framer.json (SerializedProject).
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type BreakpointId = "desktop" | "tablet" | "phone";
+export type BreakpointId = "wide" | "desktop" | "tablet" | "phone";
 
 export interface BreakpointDef {
   id: BreakpointId;
@@ -16,13 +16,14 @@ export interface BreakpointDef {
 }
 
 export const BREAKPOINTS: BreakpointDef[] = [
-  { id: "desktop", label: "Desktop", width: 1200, minWidth: 811, maxWidth: null },
+  { id: "wide", label: "Wide", width: 1728, minWidth: 1441, maxWidth: null },
+  { id: "desktop", label: "Desktop", width: 1200, minWidth: 811, maxWidth: 1440 },
   { id: "tablet", label: "Tablet", width: 810, minWidth: 391, maxWidth: 810 },
   { id: "phone", label: "Phone", width: 390, minWidth: null, maxWidth: 390 },
 ];
 
-/** Cascade order: phone inherits from tablet which inherits from desktop. */
-export const BREAKPOINT_CASCADE: BreakpointId[] = ["desktop", "tablet", "phone"];
+/** Display order. Wide inherits desktop; phone inherits tablet, which inherits desktop. */
+export const BREAKPOINT_CASCADE: BreakpointId[] = ["wide", "desktop", "tablet", "phone"];
 
 // ── Styling primitives ───────────────────────────────────────────────────────
 
@@ -42,10 +43,21 @@ export interface GradientStop {
   position: number;
 }
 
+export type RadialGradientAnchor =
+  | "top-left"
+  | "top-center"
+  | "top-right"
+  | "center-left"
+  | "center"
+  | "center-right"
+  | "bottom-left"
+  | "bottom-center"
+  | "bottom-right";
+
 export type Fill =
   | { type: "solid"; color: string; styleId?: string }
   | { type: "linear"; angle: number; stops: GradientStop[] }
-  | { type: "radial"; stops: GradientStop[] }
+  | { type: "radial"; stops: GradientStop[]; anchor?: RadialGradientAnchor }
   | { type: "image"; src: string; fit: "cover" | "contain" | "fill" | "tile"; alt?: string };
 
 export interface Shadow {
@@ -152,9 +164,10 @@ export interface StyleProps {
   textDecoration?: "none" | "underline" | "line-through";
 }
 
-/** Styles stored per breakpoint; tablet/phone are sparse overrides. */
+/** Styles stored per breakpoint; wide/tablet/phone are sparse overrides. */
 export interface ResponsiveStyles {
   desktop: StyleProps;
+  wide?: StyleProps;
   tablet?: StyleProps;
   phone?: StyleProps;
 }
@@ -402,6 +415,14 @@ export interface AssetMeta {
   file: string;
   width?: number;
   height?: number;
+  source?: "upload" | "unsplash";
+  attribution?: {
+    provider: "Unsplash";
+    photoId: string;
+    photoUrl: string;
+    photographerName: string;
+    photographerUrl: string;
+  };
 }
 
 export interface ColorStyle {
@@ -417,8 +438,8 @@ export interface TextStyle {
     StyleProps,
     "fontFamily" | "fontSize" | "fontWeight" | "lineHeight" | "letterSpacing" | "textTransform"
   >;
-  /** tablet/phone font-size overrides */
-  responsive?: { tablet?: number; phone?: number };
+  /** breakpoint-specific font-size overrides */
+  responsive?: { wide?: number; tablet?: number; phone?: number };
 }
 
 // ── Project ──────────────────────────────────────────────────────────────────

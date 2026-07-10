@@ -3,7 +3,7 @@ import { api } from "@/api/client";
 import { createPageRoot, createPage, uid } from "@/model/factory";
 import { cloneSubtree, collectSubtree, componentRootIds, componentVariants, resolveComponentVariant } from "@/model/resolve";
 import { defaultValueFor, migrateAnimationClips, clipDuration, pruneMissingAnimationTracks, syncClipDuration } from "@/model/animation";
-import type { BreakpointId, CmsCollection, CmsEntry, CmsField, ColorStyle, ComponentDef, ComponentVariant, Node, Page, SerializedProject, StyleProps, TextStyle, AnimEasing, AnimProperty, AnimKeyframe, AnimationClip } from "@/model/types";
+import type { AssetMeta, BreakpointId, CmsCollection, CmsEntry, CmsField, ColorStyle, ComponentDef, ComponentVariant, Node, Page, SerializedProject, StyleProps, TextStyle, AnimEasing, AnimProperty, AnimKeyframe, AnimationClip } from "@/model/types";
 import { nodeStyles } from "@/model/resolve";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -533,7 +533,7 @@ export const docActions = {
       const cloned = cloneSubtree(p.nodes, source.rootId, uid, true);
       Object.assign(p.nodes, cloned.nodes);
       p.nodes[cloned.rootId].parent = null;
-      const label = breakpoint === "phone" ? "Phone" : breakpoint === "tablet" ? "Tablet" : "Desktop";
+      const label = breakpoint === "wide" ? "Wide" : breakpoint === "phone" ? "Phone" : breakpoint === "tablet" ? "Tablet" : "Desktop";
       created = { id: uid(), name: label, rootId: cloned.rootId };
       const variants = [...existingVariants, created];
       const variantByBreakpoint = { ...mapping, [breakpoint]: created.id };
@@ -724,7 +724,7 @@ export const docActions = {
     });
   },
 
-  addAsset(meta: { name: string; file: string; width?: number; height?: number }) {
+  addAsset(meta: Omit<AssetMeta, "id">) {
     doc().mutate((p) => {
       p.assets.push({ id: uid(), ...meta });
     });

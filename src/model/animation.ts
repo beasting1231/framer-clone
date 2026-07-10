@@ -245,6 +245,25 @@ export function sampledToCss(v: SampledValues, positionalOffsets = false): CSSPr
   return css;
 }
 
+/** Final rendered state for every timeline-animated layer on a page. */
+export function finalFrameStylesForPage(project: SerializedProject, pageId: string): Record<string, CSSProperties> {
+  const sampledByNode: Record<string, SampledValues> = {};
+  for (const clip of project.animations ?? []) {
+    if (clip.pageId !== pageId) continue;
+    const sampled = sampleClip(clip, clipDuration(clip));
+    for (const [nodeId, values] of Object.entries(sampled)) {
+      sampledByNode[nodeId] = { ...(sampledByNode[nodeId] ?? {}), ...values };
+    }
+  }
+
+  const out: Record<string, CSSProperties> = {};
+  for (const [nodeId, values] of Object.entries(sampledByNode)) {
+    const node = project.nodes[nodeId];
+    out[nodeId] = sampledToCss(values, Boolean(node && usesPinnedAnimationOffsets(node)));
+  }
+  return out;
+}
+
 export function buildClipMotionMap(project: SerializedProject, pageId: string): Record<string, Record<string, unknown>> {
   const out: Record<string, Record<string, unknown>> = {};
   for (const clip of project.animations ?? []) {
@@ -321,6 +340,7 @@ export function nodeMotionKeyframes(clip: AnimationClip, nodeId: string, positio
     // motion `times` must start at 0 and end at 1; pad with holds if needed
     const vs = kfs.map((k) => k.value);
     const ts = kfs.map((k) => Math.min(1, Math.max(0, dur <= 0 ? 0 : k.time / dur)));
+    // Each keyframe controls the segment leaving it toward the next keyframe.
     const es = kfs.slice(0, -1).map((k) => EASING_BEZIER[k.easing ?? "linear"]);
     if (ts[0] > 0) {
       vs.unshift(vs[0]);

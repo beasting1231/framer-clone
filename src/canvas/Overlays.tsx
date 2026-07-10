@@ -29,10 +29,12 @@ const HANDLE_POS: Record<string, { x: number; y: number; cursor: string }> = {
 export function Overlays({
   viewportRef,
   visuals,
+  contextTargetId,
   onResizeStart,
 }: {
   viewportRef: RefObject<HTMLDivElement | null>;
   visuals: InteractionVisuals;
+  contextTargetId: string | null;
   onResizeStart: (nodeId: string, handle: string, e: React.MouseEvent) => void;
 }) {
   const selection = useEditor((s) => s.selection);
@@ -103,6 +105,19 @@ export function Overlays({
           </div>
         );
       })}
+
+      {/* exact node that a backtick-click will attach to Codex */}
+      {contextTargetId && (() => {
+        const r = rectFor(contextTargetId);
+        const node = project.nodes[contextTargetId];
+        if (!r || !node) return null;
+        const component = node.type === "instance" ? project.components.find((item) => item.id === node.componentId) : null;
+        return (
+          <div className="sel-rect codex-context-target" style={{ left: r.x, top: r.y, width: r.w, height: r.h }}>
+            <span>Add to AI · {component?.name || node.name}</span>
+          </div>
+        );
+      })()}
 
       {/* snap guides */}
       {(visuals.guides ?? []).map((g, i) =>

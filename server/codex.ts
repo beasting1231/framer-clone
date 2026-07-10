@@ -10,6 +10,7 @@ import type { SerializedProject } from "../src/model/types";
 import { hashProject } from "../src/model/projectHash";
 import { validateProject } from "../src/model/projectPatch";
 import {
+  customCodeProposalHasAnimation,
   sanitizeCustomCodeCss,
   sanitizeCustomCodeHtml,
   type CustomCodeProposal,
@@ -114,11 +115,27 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
     if (!rawPrompt && !hasImages) return res.status(400).json({ ok: false, error: "Enter a message or paste an image." });
     const prompt = rawPrompt || "Use the attached image or images as the reference for this request.";
 
+    let session: CodexSession | null = null;
+    let requestDisconnected = false;
+    let runId = 0;
+    const abortDisconnectedRun = () => {
+      requestDisconnected = true;
+      if (!session || !runId || session.runId !== runId) return;
+      session.child?.kill("SIGTERM");
+      session.runId += 1;
+      session.busy = false;
+      session.child = null;
+    };
+    const detachDisconnectHandler = () => req.socket.off("close", abortDisconnectedRun);
+    req.socket.once("close", abortDisconnectedRun);
+    res.once("finish", detachDisconnectHandler);
+
     const status = await getCodexStatus();
     if (!status.authenticated) return res.status(401).json({ ok: false, unauthenticated: true, error: "Codex is not authenticated." });
 
-    const session = getSession(projectId, projectPath);
+    session = getSession(projectId, projectPath);
     if (session.busy) return res.status(409).json({ ok: false, error: "Codex is already running for this project." });
+    if (requestDisconnected) return;
 
     const project = await options.readProject(projectId);
     if (!project) return res.status(404).json({ ok: false, error: "Project not found." });
@@ -150,30 +167,47 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
     } catch (error) {
       return res.status(400).json({ ok: false, error: String((error as Error).message || error) });
     }
+    if (requestDisconnected) {
+      await imageBatch.cleanup();
+      return;
+    }
 
-    const runId = session.runId + 1;
+    runId = session.runId + 1;
     session.runId = runId;
     session.busy = true;
     emitProgress(res, { type: "status", text: "Thinking...", projectId });
     const model = sanitizeCodexModel(body.model);
-    const result = await runCodexForDirectEdit({
-      prompt: contextualPrompt,
-      projectPath,
-      session,
-      projectId,
-      readProject: options.readProject,
-      writeProject: options.writeProject,
-      model,
-      reasoning: sanitizeCodexReasoning(body.reasoning, model),
-      speed: sanitizeCodexSpeed(body.speed, model),
-      imagePaths: imageBatch.paths,
-      onProgress: (payload) => emitProgress(res, { ...payload, projectId }),
-    }).finally(() => imageBatch.cleanup());
-    if (session.runId === runId) {
-      session.busy = false;
-      session.child = null;
-      if (result.threadId) session.threadId = result.threadId;
+
+    let result: Awaited<ReturnType<typeof runCodexForDirectEdit>>;
+    try {
+      result = await runCodexForDirectEdit({
+        prompt: contextualPrompt,
+        projectPath,
+        session,
+        projectId,
+        readProject: options.readProject,
+        writeProject: options.writeProject,
+        model,
+        reasoning: sanitizeCodexReasoning(body.reasoning, model),
+        speed: sanitizeCodexSpeed(body.speed, model),
+        imagePaths: imageBatch.paths,
+        shouldAbort: () => requestDisconnected || session.runId !== runId,
+        onProgress: (payload) => emitProgress(res, { ...payload, projectId }),
+      });
+    } catch (error) {
+      const message = String((error as Error).message || error || "Codex failed unexpectedly.");
+      emitProgress(res, { type: "error", text: message, projectId });
+      return res.status(500).json({ ok: false, error: message });
+    } finally {
+      detachDisconnectHandler();
+      res.off("finish", detachDisconnectHandler);
+      await imageBatch.cleanup();
+      if (session.runId === runId) {
+        session.busy = false;
+        session.child = null;
+      }
     }
+    if (session.runId === runId && result.threadId) session.threadId = result.threadId;
 
     if (!result.ok) {
       return res.json({
@@ -234,13 +268,26 @@ export function createCodexRouter(options: CodexRouterOptions): Router {
     };
     node.locked = true;
 
+    let removedAnimationTracks = 0;
+    if (customCodeProposalHasAnimation(proposal)) {
+      for (const clip of next.animations ?? []) {
+        const previousTrackCount = clip.tracks.length;
+        clip.tracks = clip.tracks.filter((track) => track.nodeId !== proposal.nodeId);
+        removedAnimationTracks += previousTrackCount - clip.tracks.length;
+      }
+    }
+
     const validation = validateProject(next);
     if (!validation.ok) return res.status(400).json({ ok: false, error: validation.errors.join(" ") });
     await options.writeProject(projectId, next);
     const savedProject = (await options.readProject(projectId)) ?? next;
     res.json({
       ok: true,
-      output: `Applied custom code to ${node.name}. Properties are now locked for that layer.`,
+      output: `Applied custom code to ${node.name}. Properties are now locked for that layer.${
+        removedAnimationTracks > 0
+          ? ` Removed ${removedAnimationTracks} existing animation drawer track${removedAnimationTracks === 1 ? "" : "s"} for that component.`
+          : ""
+      }`,
       changedFiles: ["framer.json"],
       changedNodeIds: [node.id],
       patchApplied: true,
@@ -433,6 +480,7 @@ async function runCodexForDirectEdit(options: {
   reasoning: string;
   speed: string;
   imagePaths: string[];
+  shouldAbort?: () => boolean;
   onProgress: (payload: CodexProgress) => void;
 }): Promise<
   | {
@@ -451,6 +499,7 @@ async function runCodexForDirectEdit(options: {
   let lastError = "";
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (options.shouldAbort?.()) return { ok: false, error: "Codex run stopped.", threadId: lastThreadId };
     const result = await runCodex(
       buildCodexExecArgs({
         cwd: options.projectPath,
@@ -469,6 +518,7 @@ async function runCodexForDirectEdit(options: {
         onProgress: options.onProgress,
       },
     );
+    if (options.shouldAbort?.()) return { ok: false, error: "Codex run stopped.", threadId: lastThreadId };
     if (result.threadId) lastThreadId = result.threadId;
     if (result.code !== 0) {
       lastError = result.output || result.stderr || `Codex exited with code ${result.code}.`;

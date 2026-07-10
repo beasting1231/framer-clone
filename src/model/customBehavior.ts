@@ -177,17 +177,32 @@ function isSafeStyleValue(value: unknown) {
   return typeof value === "string" && value.length <= 1000 && !/javascript\s*:|expression\s*\(|@import/i.test(value);
 }
 
-export function mountCustomBehaviors(host: HTMLElement, behaviors: CustomCodeBehavior[] | undefined): () => void {
+export function mountCustomBehaviors(
+  host: HTMLElement,
+  behaviors: CustomCodeBehavior[] | undefined,
+  options: { editor?: boolean } = {},
+): () => void {
   if (!behaviors?.length) return () => {};
   const cleanups: Array<() => void> = [];
   const running = new Map<string, Animation[]>();
 
-  const run = (behavior: CustomCodeBehavior) => {
+  const run = (behavior: CustomCodeBehavior, finishAnimations = false) => {
     behavior.actions.forEach((action, actionIndex) => {
       const targets = resolveTargets(host, action.target);
       targets.forEach((target, targetIndex) => {
         const key = `${behavior.id}:${actionIndex}:${targetIndex}`;
         if (action.type === "animate") {
+          if (finishAnimations) {
+            if (!(target instanceof HTMLElement)) return;
+            const finalFrame = action.keyframes[action.keyframes.length - 1] ?? {};
+            Object.entries(finalFrame).forEach(([property, value]) => {
+              if (property === "offset" || property === "easing" || property === "composite") return;
+              const cssProperty = property.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+              if (value === null) target.style.removeProperty(cssProperty);
+              else target.style.setProperty(cssProperty, String(value));
+            });
+            return;
+          }
           const active = (running.get(key) ?? []).filter((animation) => animation.playState === "running");
           if (action.retrigger === "ignore-while-running" && active.length) return;
           active.forEach((animation) => animation.cancel());
@@ -232,9 +247,10 @@ export function mountCustomBehaviors(host: HTMLElement, behaviors: CustomCodeBeh
 
   behaviors.forEach((behavior) => {
     if (behavior.event === "mount") {
-      run(behavior);
+      run(behavior, options.editor);
       return;
     }
+    if (options.editor && (behavior.event === "hover-enter" || behavior.event === "hover-leave")) return;
     const eventName = behavior.event === "double-click" ? "dblclick" : behavior.event === "hover-enter" ? "pointerenter" : behavior.event === "hover-leave" ? "pointerleave" : behavior.event;
     resolveTargets(host, behavior.target).forEach((target) => {
       const listener = () => run(behavior);

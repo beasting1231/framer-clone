@@ -29,7 +29,7 @@ export function fillToCss(fillProp: Fill): Partial<CSSProperties> {
       };
     case "radial":
       return {
-        backgroundImage: `radial-gradient(circle, ${fillProp.stops
+        backgroundImage: `radial-gradient(circle at ${radialAnchorPosition(fillProp.anchor)}, ${fillProp.stops
           .map((s) => `${s.color} ${Math.round(s.position * 100)}%`)
           .join(", ")})`,
       };
@@ -42,6 +42,20 @@ export function fillToCss(fillProp: Fill): Partial<CSSProperties> {
         backgroundRepeat: fillProp.fit === "tile" ? "repeat" : "no-repeat",
       };
   }
+}
+
+function radialAnchorPosition(anchor: Extract<Fill, { type: "radial" }>["anchor"]): string {
+  return {
+    "top-left": "0% 0%",
+    "top-center": "50% 0%",
+    "top-right": "100% 0%",
+    "center-left": "0% 50%",
+    center: "50% 50%",
+    "center-right": "100% 50%",
+    "bottom-left": "0% 100%",
+    "bottom-center": "50% 100%",
+    "bottom-right": "100% 100%",
+  }[anchor ?? "center"];
 }
 
 export function shadowToCss(shadows: Shadow[]): string {
@@ -78,6 +92,10 @@ export interface CssContext {
   parentLayout?: LayoutMode;
   /** direction of the parent stack */
   parentDirection?: "row" | "column";
+  /** resolved gap of the parent stack (negative values are rendered as overlap) */
+  parentGap?: number;
+  /** zero-based position among the parent's in-flow children */
+  flowIndex?: number;
   /** true when rendering inside the editor canvas (disables sticky etc.) */
   editor?: boolean;
 }
@@ -101,6 +119,14 @@ export function stylesToCss(props: StyleProps, node: Node, ctx: CssContext = {})
   if (props.maxWidth !== undefined) css.maxWidth = props.maxWidth;
   if (props.minHeight !== undefined) css.minHeight = props.minHeight;
   if (props.maxHeight !== undefined) css.maxHeight = props.maxHeight;
+  if (node.type === "image") {
+    // Replaced elements use their source file's intrinsic dimensions as an
+    // automatic minimum in flex/grid layouts. That can resize the component
+    // when its source changes even though its configured size is unchanged.
+    if (props.minWidth === undefined) css.minWidth = 0;
+    if (props.minHeight === undefined) css.minHeight = 0;
+    css.display = "block";
+  }
 
   // ── position
   if (props.positionAbsolute && props.pin) {
@@ -126,6 +152,14 @@ export function stylesToCss(props: StyleProps, node: Node, ctx: CssContext = {})
     css.top = props.y ?? 0;
   } else {
     css.position = "relative";
+  }
+  // CSS rejects negative gap values. Model negative stack spacing as a zero
+  // native gap plus a negative leading margin on every in-flow child after
+  // the first. Canvas and Preview supply flowIndex; generated sites emit the
+  // equivalent responsive child selectors.
+  if (inStack && (ctx.parentGap ?? 0) < 0 && (ctx.flowIndex ?? 0) > 0) {
+    if (ctx.parentDirection === "row") css.marginLeft = ctx.parentGap;
+    else css.marginTop = ctx.parentGap;
   }
   if (props.sticky && !ctx.editor) {
     css.position = "fixed";
@@ -167,7 +201,7 @@ export function stylesToCss(props: StyleProps, node: Node, ctx: CssContext = {})
     if (layout === "stack") {
       css.display = "flex";
       css.flexDirection = props.direction ?? "column";
-      css.gap = props.gap ?? 0;
+      css.gap = Math.max(0, props.gap ?? 0);
       if (props.wrap) css.flexWrap = "wrap";
       css.alignItems = ALIGN_MAP[props.align ?? "start"];
       css.justifyContent = JUSTIFY_MAP[props.justify ?? "start"];

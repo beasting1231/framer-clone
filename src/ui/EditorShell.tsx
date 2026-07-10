@@ -176,6 +176,7 @@ function useKeyboardShortcuts() {
         if (e.key === "1") s.setBreakpoint("desktop");
         if (e.key === "2") s.setBreakpoint("tablet");
         if (e.key === "3") s.setBreakpoint("phone");
+        if (e.key === "4") s.setBreakpoint("wide");
         if (e.key === "0") {
           useEditor.setState({ zoom: 0.55, panX: 100, panY: 70 });
         }

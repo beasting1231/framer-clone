@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type ReactNode } from "react";
 import { AnimatePresence, motion, useDragControls } from "framer-motion";
 import { nanoid } from "nanoid";
 import { api, eventSourceUrl, type CodexImageAttachment, type CodexMessage, type CodexProgress, type CodexSendResult } from "@/api/client";
 import { hashProject } from "@/model/projectHash";
-import { useCodexChat } from "@/store/codexChat";
+import { useCodexChat, type CodexContextNode } from "@/store/codexChat";
 import { useDocument } from "@/store/document";
 import { useEditor } from "@/store/editor";
 import { IconArrowUp, IconCheck, IconClose, IconPencil, IconRefresh, IconSparkle, IconStop } from "./icons";
@@ -130,6 +130,111 @@ function progressText(progress: CodexProgress | null) {
   return progress.text;
 }
 
+const CONTEXT_TOKEN_PATTERN = /\{\{node:([^}]+)\}\}/g;
+const EXPANDED_CONTEXT_PATTERN = /\[component "([^"]+)"; node id: ([^\]]+)\]/g;
+
+function contextToken(id: string) {
+  return `{{node:${id}}}`;
+}
+
+function expandContextTokens(value: string, nodes: CodexContextNode[]) {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  return value.replace(CONTEXT_TOKEN_PATTERN, (_match, id: string) => {
+    const node = byId.get(id);
+    return `[component "${node?.label || id}"; node id: ${id}]`;
+  });
+}
+
+function renderContextualMessage(value: string, nodes: CodexContextNode[] = []) {
+  const resolvedNodes = [...nodes];
+  const normalizedValue = value.replace(EXPANDED_CONTEXT_PATTERN, (_match, label: string, id: string) => {
+    if (!resolvedNodes.some((node) => node.id === id)) resolvedNodes.push({ id, label });
+    return contextToken(id);
+  });
+  const byId = new Map(resolvedNodes.map((node) => [node.id, node]));
+  const parts: ReactNode[] = [];
+  let cursor = 0;
+  let key = 0;
+  for (const match of normalizedValue.matchAll(CONTEXT_TOKEN_PATTERN)) {
+    const index = match.index ?? 0;
+    if (index > cursor) parts.push(normalizedValue.slice(cursor, index));
+    const id = match[1];
+    const node = byId.get(id) ?? { id, label: id };
+    parts.push(
+      <span className="codex-context-node codex-message-context-node" title={id} key={`${id}-${key++}`}>
+        <b>{node.label}</b>
+      </span>,
+    );
+    cursor = index + match[0].length;
+  }
+  if (cursor < normalizedValue.length) parts.push(normalizedValue.slice(cursor));
+  return parts;
+}
+
+function serializeComposer(root: HTMLElement) {
+  const parts: string[] = [];
+  const visit = (node: globalThis.Node) => {
+    if (node.nodeType === globalThis.Node.TEXT_NODE) {
+      parts.push((node.textContent || "").replaceAll("`", ""));
+      return;
+    }
+    if (!(node instanceof HTMLElement)) return;
+    const contextId = node.dataset.contextId;
+    if (contextId) {
+      parts.push(contextToken(contextId));
+      return;
+    }
+    if (node.tagName === "BR") {
+      parts.push("\n");
+      return;
+    }
+    for (const child of node.childNodes) visit(child);
+    if ((node.tagName === "DIV" || node.tagName === "P") && parts.length && !parts[parts.length - 1].endsWith("\n")) parts.push("\n");
+  };
+  for (const child of root.childNodes) visit(child);
+  return parts.join("").replace(/\n$/, "");
+}
+
+function createContextBadge(node: CodexContextNode) {
+  const badge = document.createElement("span");
+  badge.className = "codex-context-node";
+  badge.dataset.contextId = node.id;
+  badge.contentEditable = "false";
+  badge.title = node.id;
+  badge.setAttribute("aria-label", `${node.label}, component ${node.id}`);
+  const label = document.createElement("b");
+  label.textContent = node.label;
+  const remove = document.createElement("i");
+  remove.textContent = "×";
+  remove.setAttribute("aria-hidden", "true");
+  badge.append(label, remove);
+  return badge;
+}
+
+function renderComposer(root: HTMLElement, value: string, nodes: CodexContextNode[]) {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const children: globalThis.Node[] = [];
+  let cursor = 0;
+  for (const match of value.matchAll(CONTEXT_TOKEN_PATTERN)) {
+    const index = match.index ?? 0;
+    if (index > cursor) children.push(document.createTextNode(value.slice(cursor, index)));
+    const id = match[1];
+    children.push(createContextBadge(byId.get(id) ?? { id, label: id }));
+    cursor = index + match[0].length;
+  }
+  if (cursor < value.length) children.push(document.createTextNode(value.slice(cursor)));
+  root.replaceChildren(...children);
+}
+
+function placeCaretAtEnd(root: HTMLElement) {
+  const range = document.createRange();
+  range.selectNodeContents(root);
+  range.collapse(false);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
 export function CodexChat() {
   const project = useDocument((s) => s.project);
   const projectId = useDocument((s) => s.projectId);
@@ -147,13 +252,15 @@ export function CodexChat() {
   const mutateSession = useCodexChat((s) => s.mutateSession);
   const resetSession = useCodexChat((s) => s.resetSession);
   const logRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLDivElement>(null);
+  const savedComposerRangeRef = useRef<Range | null>(null);
   const chatRef = useRef<HTMLElement>(null);
   const focusComposerOnOpenRef = useRef(false);
   const dragControls = useDragControls();
   const [dragConstraints, setDragConstraints] = useState({ left: 0, right: 0, top: 0, bottom: 0 });
   const input = session?.input ?? "";
   const inputImages = session?.inputImages ?? [];
+  const contextNodes = session?.contextNodes ?? [];
   const promptQueue = session?.promptQueue ?? [];
   const messages = session?.messages ?? [];
   const progress = session?.progress ?? null;
@@ -231,6 +338,65 @@ export function CodexChat() {
     return () => window.removeEventListener("keydown", toggleChatWithTab);
   }, [projectId]);
 
+  const syncComposerState = useCallback(() => {
+    if (!projectId || !inputRef.current) return;
+    const value = serializeComposer(inputRef.current);
+    const referencedIds = new Set([...value.matchAll(CONTEXT_TOKEN_PATTERN)].map((match) => match[1]));
+    const current = useCodexChat.getState().ensureSession(projectId);
+    updateSession(projectId, {
+      input: value,
+      contextNodes: current.contextNodes.filter((node) => referencedIds.has(node.id)),
+    });
+  }, [projectId, updateSession]);
+
+  const insertContextAtCaret = useCallback((node: CodexContextNode) => {
+    const root = inputRef.current;
+    if (!root || !projectId) return;
+    const saved = savedComposerRangeRef.current;
+    const range = saved && root.contains(saved.startContainer) ? saved.cloneRange() : document.createRange();
+    if (!saved || !root.contains(saved.startContainer)) {
+      range.selectNodeContents(root);
+      range.collapse(false);
+    }
+    range.deleteContents();
+    const badge = createContextBadge(node);
+    const trailingSpace = document.createTextNode(" ");
+    range.insertNode(trailingSpace);
+    range.insertNode(badge);
+    range.setStartAfter(trailingSpace);
+    range.collapse(true);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    savedComposerRangeRef.current = range.cloneRange();
+    root.focus();
+    syncComposerState();
+  }, [projectId, syncComposerState]);
+
+  useEffect(() => {
+    const rememberCaret = () => {
+      const root = inputRef.current;
+      const selection = window.getSelection();
+      if (root && selection?.rangeCount && root.contains(selection.anchorNode)) {
+        savedComposerRangeRef.current = selection.getRangeAt(0).cloneRange();
+      }
+    };
+    document.addEventListener("selectionchange", rememberCaret);
+    return () => document.removeEventListener("selectionchange", rememberCaret);
+  }, []);
+
+  useEffect(() => {
+    const revealContext = (event: Event) => {
+      const node = (event as CustomEvent<CodexContextNode>).detail;
+      if (!node) return;
+      focusComposerOnOpenRef.current = true;
+      setOpen(true);
+      window.requestAnimationFrame(() => window.requestAnimationFrame(() => insertContextAtCaret(node)));
+    };
+    window.addEventListener("framer:codex-context-added", revealContext);
+    return () => window.removeEventListener("framer:codex-context-added", revealContext);
+  }, [insertContextAtCaret]);
+
   const updateDragConstraints = useCallback(() => {
     const element = chatRef.current;
     if (!element) return;
@@ -247,9 +413,16 @@ export function CodexChat() {
   useLayoutEffect(() => {
     if (!open) return;
     updateDragConstraints();
+    if (focusComposerOnOpenRef.current) window.requestAnimationFrame(() => inputRef.current?.focus());
     window.addEventListener("resize", updateDragConstraints);
     return () => window.removeEventListener("resize", updateDragConstraints);
   }, [open, updateDragConstraints]);
+
+  useLayoutEffect(() => {
+    const root = inputRef.current;
+    if (!open || !root || serializeComposer(root) === input) return;
+    renderComposer(root, input, contextNodes);
+  }, [contextNodes, input, open]);
 
   if (!project || !projectId) return null;
 
@@ -301,9 +474,10 @@ export function CodexChat() {
     }
   };
 
-  async function runPrompt(promptText: string, images: CodexImageAttachment[] = []) {
+  async function runPrompt(promptText: string, images: CodexImageAttachment[] = [], promptContext = contextNodes) {
     if (!projectId) return;
-    const prompt = promptText.trim();
+    const rawPrompt = promptText.trim();
+    const prompt = expandContextTokens(rawPrompt, promptContext);
     const currentSession = useCodexChat.getState().ensureSession(projectId);
     if (!authenticated || (!prompt && !images.length) || currentSession.busy || currentSession.pendingCustomCode) return;
     const generation = currentSession.generation;
@@ -311,10 +485,10 @@ export function CodexChat() {
     const conversation = currentSession.messages
       .filter((message) => message.text.trim())
       .slice(-8)
-      .map(({ role, text }) => ({ role, text }));
+      .map(({ role, text, contextNodes }) => ({ role, text: expandContextTokens(text, contextNodes ?? []) }));
     updateSession(projectId, { busy: true, runId, progress: { type: "status", text: "Thinking..." } });
     useDocument.getState().setAgentBusy(true);
-    appendMessage(projectId, { role: "user", text: prompt, images }, generation);
+    appendMessage(projectId, { role: "user", text: rawPrompt, images, contextNodes: promptContext }, generation);
     try {
       await useDocument.getState().flushSave();
       const currentProject = useDocument.getState().project;
@@ -324,7 +498,7 @@ export function CodexChat() {
         prompt,
         images,
         conversation,
-        selection,
+        selection: promptContext.length ? promptContext.map((node) => node.id) : selection,
         model,
         reasoning,
         speed,
@@ -370,7 +544,8 @@ export function CodexChat() {
       ...current,
       input: "",
       inputImages: [],
-      promptQueue: [...current.promptQueue, { id: nanoid(), text: prompt, images: current.inputImages }],
+      contextNodes: [],
+      promptQueue: [...current.promptQueue, { id: nanoid(), text: prompt, images: current.inputImages, contextNodes: current.contextNodes }],
     }));
   }
 
@@ -379,13 +554,14 @@ export function CodexChat() {
     const current = useCodexChat.getState().ensureSession(projectId);
     const prompt = current.input.trim();
     const images = current.inputImages;
+    const promptContext = current.contextNodes;
     if (!prompt && !images.length) return;
     if (current.busy || interruptingQueueId) {
       queueDraft();
       return;
     }
-    updateSession(projectId, { input: "", inputImages: [] });
-    void runPrompt(prompt, images);
+    updateSession(projectId, { input: "", inputImages: [], contextNodes: [] });
+    void runPrompt(prompt, images, promptContext);
   }
 
   function processNextQueuedPrompt(generation: number) {
@@ -401,7 +577,7 @@ export function CodexChat() {
     }
     const [next, ...remaining] = current.promptQueue;
     updateSession(projectId, { promptQueue: remaining });
-    void runPrompt(next.text, next.images);
+    void runPrompt(next.text, next.images, next.contextNodes);
   }
 
   function editQueuedPrompt(id: string) {
@@ -412,11 +588,12 @@ export function CodexChat() {
       ...current,
       input: queued.text,
       inputImages: queued.images,
+      contextNodes: queued.contextNodes,
       promptQueue: current.promptQueue.filter((item) => item.id !== id),
     }));
     window.requestAnimationFrame(() => {
       inputRef.current?.focus();
-      inputRef.current?.setSelectionRange(queued.text.length, queued.text.length);
+      if (inputRef.current) placeCaretAtEnd(inputRef.current);
     });
   }
 
@@ -446,7 +623,7 @@ export function CodexChat() {
     try {
       await api.codexStop(projectId);
       setInterruptingQueueId(null);
-      if (isCurrentChat(projectId, generation)) void runPrompt(queued.text, queued.images);
+      if (isCurrentChat(projectId, generation)) void runPrompt(queued.text, queued.images, queued.contextNodes);
     } catch (err) {
       if (isCurrentChat(projectId, generation)) {
         appendMessage(projectId, { role: "assistant", text: String((err as Error).message || err) }, generation);
@@ -511,7 +688,29 @@ export function CodexChat() {
     resetSession(projectId);
   };
 
-  async function handlePastedImages(event: ReactClipboardEvent<HTMLTextAreaElement>) {
+  function insertPlainTextAtCaret(value: string) {
+    const root = inputRef.current;
+    if (!root) return;
+    const selection = window.getSelection();
+    const current = selection?.rangeCount ? selection.getRangeAt(0) : null;
+    const saved = current && root.contains(current.startContainer) ? current : savedComposerRangeRef.current;
+    const range = saved && root.contains(saved.startContainer) ? saved.cloneRange() : document.createRange();
+    if (!saved || !root.contains(saved.startContainer)) {
+      range.selectNodeContents(root);
+      range.collapse(false);
+    }
+    range.deleteContents();
+    const text = document.createTextNode(value.replaceAll("`", ""));
+    range.insertNode(text);
+    range.setStartAfter(text);
+    range.collapse(true);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    savedComposerRangeRef.current = range.cloneRange();
+    syncComposerState();
+  }
+
+  async function handlePastedImages(event: ReactClipboardEvent<HTMLElement>) {
     if (!projectId) return;
     const files = Array.from(event.clipboardData.items)
       .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
@@ -629,7 +828,7 @@ export function CodexChat() {
                     ))}
                   </div>
                 ) : null}
-                {message.text ? <div className="codex-message-text">{message.text}</div> : null}
+                {message.text ? <div className="codex-message-text">{renderContextualMessage(message.text, message.contextNodes)}</div> : null}
               </div>
             ))}
             {pendingCustomCode && (
@@ -687,7 +886,7 @@ export function CodexChat() {
                           {queued.images.length > 3 ? <b>+{queued.images.length - 3}</b> : null}
                         </div>
                       ) : null}
-                      {queued.text ? <p>{queued.text}</p> : null}
+                      {queued.text ? <p>{expandContextTokens(queued.text, queued.contextNodes)}</p> : null}
                     </div>
                     <div className="codex-queued-actions">
                       <button type="button" aria-label="Edit queued message" title="Edit" onClick={() => editQueuedPrompt(queued.id)}>
@@ -733,15 +932,50 @@ export function CodexChat() {
                   ))}
                 </div>
               ) : null}
-              <textarea
+              <div
                 ref={inputRef}
-                autoFocus={focusComposerOnOpenRef.current}
-                value={input}
-                placeholder={authenticated ? (busy ? "Queue your next message..." : "Ask Codex to edit this project...") : "Login to Codex first"}
-                disabled={!authenticated || Boolean(pendingCustomCode)}
-                onChange={(event) => updateSession(projectId, { input: event.target.value })}
-                onPaste={(event) => void handlePastedImages(event)}
+                className="codex-rich-input"
+                role="textbox"
+                aria-label="Message Codex"
+                aria-multiline="true"
+                aria-disabled={!authenticated || Boolean(pendingCustomCode)}
+                contentEditable={authenticated && !pendingCustomCode}
+                suppressContentEditableWarning
+                data-placeholder={authenticated ? (busy ? "Queue your next message..." : "Ask Codex to edit this project...") : "Login to Codex first"}
+                onFocus={() => {
+                  if (focusComposerOnOpenRef.current && inputRef.current) placeCaretAtEnd(inputRef.current);
+                }}
+                onInput={(event) => {
+                  const root = event.currentTarget;
+                  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+                  let textNode = walker.nextNode();
+                  while (textNode) {
+                    if (textNode.textContent?.includes("`")) textNode.textContent = textNode.textContent.replaceAll("`", "");
+                    textNode = walker.nextNode();
+                  }
+                  syncComposerState();
+                }}
+                onClick={(event) => {
+                  const badge = (event.target as HTMLElement).closest<HTMLElement>("[data-context-id]");
+                  if (!badge || !event.currentTarget.contains(badge)) return;
+                  event.preventDefault();
+                  badge.remove();
+                  syncComposerState();
+                  event.currentTarget.focus();
+                }}
+                onPaste={(event) => {
+                  const hasImages = Array.from(event.clipboardData.items).some((item) => item.kind === "file" && item.type.startsWith("image/"));
+                  if (hasImages) void handlePastedImages(event);
+                  else {
+                    event.preventDefault();
+                    insertPlainTextAtCaret(event.clipboardData.getData("text/plain"));
+                  }
+                }}
                 onKeyDown={(event) => {
+                  if (event.key === "`") {
+                    event.preventDefault();
+                    return;
+                  }
                   if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                     event.preventDefault();
                     submitDraft();

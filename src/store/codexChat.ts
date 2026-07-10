@@ -6,11 +6,18 @@ export interface CodexQueuedPrompt {
   id: string;
   text: string;
   images: CodexImageAttachment[];
+  contextNodes: CodexContextNode[];
+}
+
+export interface CodexContextNode {
+  id: string;
+  label: string;
 }
 
 export interface CodexChatSession {
   input: string;
   inputImages: CodexImageAttachment[];
+  contextNodes: CodexContextNode[];
   promptQueue: CodexQueuedPrompt[];
   messages: CodexMessage[];
   progress: CodexProgress | null;
@@ -32,6 +39,8 @@ interface CodexChatState {
   ensureSession: (projectId: string) => CodexChatSession;
   updateSession: (projectId: string, patch: Partial<CodexChatSession>) => void;
   mutateSession: (projectId: string, fn: (session: CodexChatSession) => CodexChatSession) => void;
+  addContextNode: (projectId: string, node: CodexContextNode) => void;
+  removeContextNode: (projectId: string, nodeId: string) => void;
   resetSession: (projectId: string) => void;
 }
 
@@ -91,6 +100,7 @@ function saveRunSettings(patch: Partial<CodexChatSession>): CodexRunSettings | n
 const emptySession = (): CodexChatSession => ({
   input: "",
   inputImages: [],
+  contextNodes: [],
   promptQueue: [],
   messages: [],
   progress: null,
@@ -131,6 +141,28 @@ export const useCodexChat = create<CodexChatState>((set, get) => ({
     set((state) => {
       const current = state.sessions[projectId] ?? emptySession();
       return { sessions: { ...state.sessions, [projectId]: fn(current) } };
+    });
+  },
+
+  addContextNode: (projectId, node) => {
+    set((state) => {
+      const current = state.sessions[projectId] ?? emptySession();
+      const contextNodes = current.contextNodes.some((item) => item.id === node.id)
+        ? current.contextNodes
+        : [...current.contextNodes, node];
+      return { sessions: { ...state.sessions, [projectId]: { ...current, contextNodes } } };
+    });
+  },
+
+  removeContextNode: (projectId, nodeId) => {
+    set((state) => {
+      const current = state.sessions[projectId] ?? emptySession();
+      return {
+        sessions: {
+          ...state.sessions,
+          [projectId]: { ...current, contextNodes: current.contextNodes.filter((node) => node.id !== nodeId) },
+        },
+      };
     });
   },
 

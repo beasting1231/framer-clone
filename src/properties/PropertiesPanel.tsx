@@ -17,7 +17,9 @@ import type {
 import { NumberInput, PropRow, Segmented, ColorInput, Section } from "./controls";
 import { AlignmentBar } from "./AlignmentBar";
 import { AbsoluteAnchorPicker } from "./AbsoluteAnchorPicker";
+import { RadialAnchorPicker } from "./RadialAnchorPicker";
 import { IconPlus, IconTrash } from "@/ui/icons";
+import { Fragment } from "react";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Context-sensitive properties panel (right side). Reads resolved styles at
@@ -42,7 +44,7 @@ export function PropertiesPanel() {
           <br />
           <br />
           <span style={{ fontSize: 11 }}>
-            Editing at <strong>{breakpoint}</strong> — changes at tablet/phone become overrides.
+            Editing at <strong>{breakpoint}</strong> — changes at wide/tablet/phone become overrides.
           </span>
         </div>
       </div>
@@ -117,7 +119,7 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
   if (!multi && node.customCode) {
     return (
       <div className="right-panel custom-code-locked-panel">
-        <Section title={node.name}>
+        <Section title={node.name} sectionId="selection">
           <PropRow label="Name">
             <input className="prop-input" value={node.name} disabled readOnly />
           </PropRow>
@@ -156,7 +158,7 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
       )}
       {multi && <AlignmentBar />}
       {/* ── name & breakpoint hint */}
-      <Section title={multi ? `${ids.length} layers` : node.name}>
+      <Section title={multi ? `${ids.length} layers` : node.name} sectionId="selection">
         {isHover && (
           <div className="muted" style={{ fontSize: 10, lineHeight: 1.5, marginBottom: 4 }}>
             Editing hover state — blue dots mark overrides from normal (click to reset).
@@ -164,7 +166,7 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
         )}
         {bp !== "desktop" && !isHover && (
           <div className="muted" style={{ fontSize: 10, lineHeight: 1.5, marginBottom: 4 }}>
-            Editing {bp} — changed values override desktop. Blue dots mark overrides (click to reset).
+            Editing {bp} — changed values override inherited styles. Blue dots mark overrides (click to reset).
           </div>
         )}
         {!multi && !isRoot && (
@@ -317,7 +319,7 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
                 { value: "stack", label: "Stack" },
                 { value: "grid", label: "Grid" },
               ]}
-              onChange={(v) => set({ layout: v })}
+              onChange={(v) => set({ layout: v, ...(v === "grid" && (styles.gap ?? 0) < 0 ? { gap: 0 } : {}) })}
             />
           </PropRow>
           {styles.layout === "stack" && (
@@ -390,7 +392,7 @@ function NodeProperties({ node, ids, project, bp }: { node: Node; ids: string[];
           )}
           {(styles.layout === "stack" || styles.layout === "grid") && (
             <PropRow label="Gap" overridden={ov("gap")} onReset={() => reset("gap")}>
-              <NumberInput value={styles.gap ?? 0} min={0} unit="px" onChange={(v) => set({ gap: v })} />
+              <NumberInput value={styles.gap ?? 0} min={styles.layout === "grid" ? 0 : undefined} unit="px" onChange={(v) => set({ gap: v })} />
             </PropRow>
           )}
           <PaddingControl styles={styles} overridden={ov("padding")} onReset={() => reset("padding")} onChange={set} />
@@ -958,16 +960,37 @@ function FillSection({
             </PropRow>
           )}
           {fillValue.stops.map((stop, i) => (
-            <PropRow key={i} label={`Stop ${i + 1}`}>
-              <ColorInput
-                value={stop.color}
-                onChange={(c) => {
-                  const stops = fillValue.stops.map((st, j) => (j === i ? { ...st, color: c } : st));
-                  set({ fill: { ...fillValue, stops } as Fill });
-                }}
-              />
-            </PropRow>
+            <Fragment key={i}>
+              <PropRow label={`Stop ${i + 1}`}>
+                <ColorInput
+                  value={stop.color}
+                  onChange={(c) => {
+                    const stops = fillValue.stops.map((st, j) => (j === i ? { ...st, color: c } : st));
+                    set({ fill: { ...fillValue, stops } as Fill });
+                  }}
+                />
+              </PropRow>
+              {fillValue.type === "radial" && (
+                <PropRow label={`Reach ${i + 1}`}>
+                  <NumberInput
+                    value={Math.round(stop.position * 100)}
+                    min={0}
+                    max={100}
+                    unit="%"
+                    onChange={(position) => {
+                      const stops = fillValue.stops.map((st, j) => (j === i ? { ...st, position: position / 100 } : st));
+                      set({ fill: { ...fillValue, stops } });
+                    }}
+                  />
+                </PropRow>
+              )}
+            </Fragment>
           ))}
+          {fillValue.type === "radial" && (
+            <PropRow label="Anchor">
+              <RadialAnchorPicker value={fillValue.anchor} onChange={(anchor) => set({ fill: { ...fillValue, anchor } })} />
+            </PropRow>
+          )}
         </>
       )}
       {fillValue?.type === "image" && (

@@ -1,5 +1,4 @@
 import {
-  BREAKPOINT_CASCADE,
   type BreakpointId,
   type ComponentDef,
   type ComponentVariant,
@@ -16,13 +15,15 @@ export function componentVariants(component: ComponentDef): ComponentVariant[] {
     : [{ id: `${component.id}:default`, name: "Default", rootId: component.rootId }];
 }
 
-/** Resolve a component's structural state with desktop -> tablet -> phone inheritance. */
+/** Resolve a component's structural state. Wide inherits desktop; phone inherits tablet. */
 export function resolveComponentVariant(component: ComponentDef, breakpoint: BreakpointId): ComponentVariant {
   const variants = componentVariants(component);
   const byId = new Map(variants.map((variant) => [variant.id, variant]));
   const mapping = component.variantByBreakpoint ?? {};
   const requested =
-    breakpoint === "phone"
+    breakpoint === "wide"
+      ? (mapping.wide ?? mapping.desktop)
+      : breakpoint === "phone"
       ? (mapping.phone ?? mapping.tablet ?? mapping.desktop)
       : breakpoint === "tablet"
         ? (mapping.tablet ?? mapping.desktop)
@@ -36,17 +37,14 @@ export function componentRootIds(component: ComponentDef): string[] {
 
 /**
  * Resolve the effective styles of a node at a given breakpoint by cascading
- * desktop → tablet → phone (desktop-first, like Framer).
+ * Desktop is the base. Wide adds an upward override, while tablet and phone
+ * form the existing downward cascade.
  */
 export function resolveStyles(styles: ResponsiveStyles, breakpoint: BreakpointId): StyleProps {
-  const idx = BREAKPOINT_CASCADE.indexOf(breakpoint);
-  let out: StyleProps = { ...styles.desktop };
-  for (let i = 1; i <= idx; i++) {
-    const bp = BREAKPOINT_CASCADE[i];
-    const overrides = styles[bp as "tablet" | "phone"];
-    if (overrides) out = { ...out, ...overrides };
-  }
-  return out;
+  if (breakpoint === "wide") return { ...styles.desktop, ...styles.wide };
+  if (breakpoint === "tablet") return { ...styles.desktop, ...styles.tablet };
+  if (breakpoint === "phone") return { ...styles.desktop, ...styles.tablet, ...styles.phone };
+  return { ...styles.desktop };
 }
 
 /** Which properties have an explicit override at the given breakpoint. */
@@ -63,7 +61,9 @@ export function applySharedStyles(props: StyleProps, project: SerializedProject,
     const ts = project.textStyles.find((t) => t.id === props.textStyleId);
     if (ts) {
       const responsiveSize =
-        breakpoint === "phone"
+        breakpoint === "wide"
+          ? ts.responsive?.wide
+          : breakpoint === "phone"
           ? (ts.responsive?.phone ?? ts.responsive?.tablet)
           : breakpoint === "tablet"
             ? ts.responsive?.tablet

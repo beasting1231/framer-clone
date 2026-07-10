@@ -212,8 +212,39 @@ export function ColorInput({ value, onChange }: { value: string; onChange: (colo
   );
 }
 
-export function Section({ title, children, action }: { title: string; children: ReactNode; action?: ReactNode }) {
-  const [isOpen, setIsOpen] = useState(true);
+const PROPERTY_SECTION_STATE_KEY = "framer.properties.section-state.v1";
+let propertySectionState: Record<string, boolean> | null = null;
+
+function readPropertySectionState() {
+  if (propertySectionState) return propertySectionState;
+  try {
+    propertySectionState = JSON.parse(localStorage.getItem(PROPERTY_SECTION_STATE_KEY) ?? "{}") as Record<string, boolean>;
+  } catch {
+    propertySectionState = {};
+  }
+  return propertySectionState;
+}
+
+function savePropertySectionState(sectionId: string, isOpen: boolean) {
+  const next = { ...readPropertySectionState(), [sectionId]: isOpen };
+  propertySectionState = next;
+  try {
+    localStorage.setItem(PROPERTY_SECTION_STATE_KEY, JSON.stringify(next));
+  } catch {
+    // The in-memory state still preserves toggles for the current editor session.
+  }
+}
+
+export function Section({ title, children, action, sectionId = title }: { title: string; children: ReactNode; action?: ReactNode; sectionId?: string }) {
+  const [isOpen, setIsOpen] = useState(() => readPropertySectionState()[sectionId] ?? true);
+
+  const toggle = () => {
+    setIsOpen((open) => {
+      const next = !open;
+      savePropertySectionState(sectionId, next);
+      return next;
+    });
+  };
 
   return (
     <div className={`prop-section ${isOpen ? "is-open" : "is-collapsed"}`}>
@@ -222,7 +253,7 @@ export function Section({ title, children, action }: { title: string; children: 
           type="button"
           className="prop-section-toggle"
           aria-expanded={isOpen}
-          onClick={() => setIsOpen((open) => !open)}
+          onClick={toggle}
         >
           <span>{title}</span>
           <span className="prop-section-chevron" aria-hidden="true" />

@@ -5,6 +5,7 @@ import { createFrame, createStack, createText, createImage, px } from "@/model/f
 import { docActions, useDocument } from "@/store/document";
 import { useTimeline } from "@/store/timeline";
 import { useEditor } from "@/store/editor";
+import { useCodexChat } from "@/store/codexChat";
 import { ArtboardContent } from "./CanvasRenderer";
 import { Overlays, type InteractionVisuals } from "./Overlays";
 import { CanvasContextMenu } from "./ContextMenu";
@@ -66,9 +67,13 @@ export function Canvas() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const gesture = useRef<Gesture | null>(null);
   const spaceDown = useRef(false);
+  const backquoteDown = useRef(false);
+  const lastPointer = useRef<{ x: number; y: number } | null>(null);
   const [visuals, setVisuals] = useState<InteractionVisuals>({});
+  const [contextTargetId, setContextTargetId] = useState<string | null>(null);
 
   const project = useDocument((s) => s.project);
+  const projectId = useDocument((s) => s.projectId);
   const context = useEditor((s) => s.context);
   const zoom = useEditor((s) => s.zoom);
   const panX = useEditor((s) => s.panX);
@@ -99,6 +104,38 @@ export function Canvas() {
     return () => {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
+    };
+  }, []);
+
+  // Holding ` turns the next canvas click into explicit Codex context.
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== "Backquote" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) return;
+      backquoteDown.current = true;
+      const point = lastPointer.current;
+      const element = point ? document.elementFromPoint(point.x, point.y) as HTMLElement | null : null;
+      setContextTargetId(element?.closest<HTMLElement>("[data-node-id]")?.dataset.nodeId ?? null);
+      e.preventDefault();
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code === "Backquote") {
+        backquoteDown.current = false;
+        setContextTargetId(null);
+      }
+    };
+    const reset = () => {
+      backquoteDown.current = false;
+      setContextTargetId(null);
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", reset);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", reset);
     };
   }, []);
 
@@ -212,6 +249,36 @@ export function Canvas() {
     return null;
   };
 
+  /** Resolve the frame whose background should receive a dragged asset.
+   * Prefer a selected frame under the pointer, including the page root, so a
+   * background-fill gesture can never fall through and insert a size-changing
+   * image child. Empty, unselected artboard space still creates an image layer. */
+  const assetFillTargetAt = (clientX: number, clientY: number): { nodeId: string; bp: BreakpointId } | null => {
+    if (!project || !rootId) return null;
+    const elements = document.elementsFromPoint(clientX, clientY);
+    const selected = new Set(useEditor.getState().selection);
+    const resolveElement = (element: Element, selectedOnly: boolean) => {
+      const nodeId = (element as HTMLElement).dataset?.nodeId;
+      if (!nodeId || (selectedOnly && !selected.has(nodeId)) || (!selectedOnly && nodeId === rootId)) return null;
+      const node = project.nodes[nodeId];
+      // Component instances deliberately remap all of their internal DOM back
+      // to the instance id. Treat the instance itself as the precise fill
+      // target instead of skipping it and falling through to an outer frame.
+      if (!node || (node.type !== "frame" && node.type !== "instance") || node.tag === "input" || node.tag === "textarea") return null;
+      const bp = artboardBpFromTarget(element);
+      return bp ? { nodeId, bp } : null;
+    };
+    for (const element of elements) {
+      const target = resolveElement(element, true);
+      if (target) return target;
+    }
+    for (const element of elements) {
+      const target = resolveElement(element, false);
+      if (target) return target;
+    }
+    return null;
+  };
+
   /** Insertion index within a stack/grid container based on cursor. */
   const insertionIndex = (parentId: string, bp: BreakpointId, clientX: number, clientY: number, excludeIds: Set<string>): number => {
     if (!project) return 0;
@@ -304,6 +371,22 @@ export function Canvas() {
     // text editing passthrough
     if ((e.target as HTMLElement).isContentEditable) return;
     if (s.editingTextId) s.setEditingText(null);
+
+    if (backquoteDown.current && projectId) {
+      const nodeId = hitChain(e.target as Element)[0];
+      const node = nodeId ? project.nodes[nodeId] : null;
+      if (node) {
+        const component = node.type === "instance" ? project.components.find((item) => item.id === node.componentId) : null;
+        useCodexChat.getState().addContextNode(projectId, {
+          id: node.id,
+          label: component?.name || node.name || node.id,
+        });
+        window.dispatchEvent(new CustomEvent("framer:codex-context-added", { detail: { id: node.id, label: component?.name || node.name || node.id } }));
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      return;
+    }
 
     const retargetTrackId = useTimeline.getState().retargetTrackId;
     if (retargetTrackId) {
@@ -398,10 +481,15 @@ export function Canvas() {
     const vpRect = vp.getBoundingClientRect();
     const sx = e.clientX - vpRect.left;
     const sy = e.clientY - vpRect.top;
+    lastPointer.current = { x: e.clientX, y: e.clientY };
 
     if (!g) {
-      // hover highlight
       const chain = hitChain(e.target as Element);
+      if (backquoteDown.current) {
+        setContextTargetId(chain[0] ?? null);
+        return;
+      }
+      // hover highlight
       const candidate = chain.length > 0 ? pickCandidate(chain, s.selection) : null;
       if (candidate !== s.hoveredId) s.setHovered(candidate);
       return;
@@ -729,6 +817,15 @@ export function Canvas() {
   const onDragOver = (e: React.DragEvent) => {
     if (e.dataTransfer.types.includes("application/x-insert") || e.dataTransfer.types.includes("application/x-asset") || e.dataTransfer.types.includes("application/x-component")) {
       e.preventDefault();
+      if (e.dataTransfer.types.includes("application/x-asset")) {
+        e.dataTransfer.dropEffect = "copy";
+        const fillTarget = assetFillTargetAt(e.clientX, e.clientY);
+        if (fillTarget && viewportRef.current) {
+          const element = findNodeElement(viewportRef.current, fillTarget.bp, fillTarget.nodeId);
+          setVisuals({ dropHighlight: element ? elementRect(element, viewportRef.current) : undefined });
+          return;
+        }
+      }
       // Sections always land on the page root — highlight the root insert line.
       const sectionDrop = e.dataTransfer.types.includes("application/x-insert-section") && rootId;
       const target = sectionDrop
@@ -758,6 +855,26 @@ export function Canvas() {
     if (!project || !rootId) return;
     const s = useEditor.getState();
     const templateId = e.dataTransfer.getData("application/x-insert");
+    const assetUrl = e.dataTransfer.getData("application/x-asset");
+
+    if (assetUrl) {
+      const fillTarget = assetFillTargetAt(e.clientX, e.clientY);
+      if (fillTarget) {
+        const currentFill = nodeStyles(project.nodes[fillTarget.nodeId], project, fillTarget.bp).fill;
+        docActions.setStyles(
+          [fillTarget.nodeId],
+          fillTarget.bp,
+          {
+            fill:
+              currentFill?.type === "image"
+                ? { ...currentFill, src: assetUrl }
+                : { type: "image", src: assetUrl, fit: "cover" },
+          },
+        );
+        s.select([fillTarget.nodeId]);
+        return;
+      }
+    }
 
     // Sections always insert as siblings on the page/component root stack.
     if (templateId && isSectionTemplate(templateId)) {
@@ -789,7 +906,6 @@ export function Canvas() {
       if (inserted) s.select([inserted]);
       return;
     }
-    const assetUrl = e.dataTransfer.getData("application/x-asset");
     if (assetUrl) {
       const node = createImage(assetUrl);
       positionNode(node);
@@ -836,7 +952,11 @@ export function Canvas() {
       onContextMenu={onContextMenu}
       onDragOver={onDragOver}
       onDrop={onDrop}
-      onMouseLeave={() => useEditor.getState().setHovered(null)}
+      onMouseLeave={() => {
+        lastPointer.current = null;
+        setContextTargetId(null);
+        useEditor.getState().setHovered(null);
+      }}
     >
       <div className="canvas-world" style={{ transform: `translate(${panX}px, ${panY}px) scale(${zoom})` }}>
         {component && componentVariant && (
@@ -881,13 +1001,13 @@ export function Canvas() {
                   if (created) useEditor.getState().select([created.rootId]);
                 }}
               >
-                Create {breakpoint === "phone" ? "Phone" : "Tablet"} state
+                Create {BREAKPOINTS.find((def) => def.id === breakpoint)?.label} state
               </button>
             )}
           </div>
         )}
         {artboards.map(({ bp, width, x }) => (
-          <div key={bp} data-artboard={bp} className="artboard" style={{ left: x, top: 0, width, minHeight: 400 }}>
+          <div key={bp} data-artboard={bp} className="artboard" style={{ left: x, top: 0, width, minHeight: 400, containerType: "inline-size" }}>
             {!component && (
               <div
                 className={`artboard-label ${bp === breakpoint ? "active" : ""}`}
@@ -905,7 +1025,7 @@ export function Canvas() {
           </div>
         ))}
       </div>
-      <Overlays viewportRef={viewportRef} visuals={visuals} onResizeStart={onResizeStart} />
+      <Overlays viewportRef={viewportRef} visuals={visuals} contextTargetId={contextTargetId} onResizeStart={onResizeStart} />
       <CanvasContextMenu />
     </div>
   );

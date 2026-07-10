@@ -2,7 +2,7 @@ import { buildTemplate, type TemplateId } from "@/insert/templates";
 import { pruneMissingAnimationTracks, syncClipDuration } from "./animation";
 import { validateCustomCodeProposal } from "./customCode";
 import { uid } from "./factory";
-import { componentRootIds, componentVariants } from "./resolve";
+import { componentRootIds, componentVariants, nodeStyles } from "./resolve";
 import type { AnimEasing, AnimProperty, AnimationClip, BreakpointId, Node, SerializedProject, StyleProps } from "./types";
 
 export type ProjectPatchOp =
@@ -44,10 +44,21 @@ export interface ValidationResult {
   errors: string[];
 }
 
-const BREAKPOINTS = new Set<BreakpointId>(["desktop", "tablet", "phone"]);
+const BREAKPOINTS = new Set<BreakpointId>(["wide", "desktop", "tablet", "phone"]);
 const NODE_TYPES = new Set(["frame", "text", "image", "icon", "instance", "collectionList"]);
 const LAYOUTS = new Set(["absolute", "stack", "grid"]);
 const SIZE_MODES = new Set(["fixed", "fill", "relative", "fit", "viewport"]);
+const RADIAL_GRADIENT_ANCHORS = new Set([
+  "top-left",
+  "top-center",
+  "top-right",
+  "center-left",
+  "center",
+  "center-right",
+  "bottom-left",
+  "bottom-center",
+  "bottom-right",
+]);
 const TAGS = new Set(["div", "section", "nav", "header", "footer", "main", "article", "aside", "button", "form", "input", "textarea"]);
 const TEXT_TAGS = new Set(["p", "h1", "h2", "h3", "h4", "h5", "h6", "span", "blockquote", "code"]);
 const NODE_FIELD_KEYS = new Set(["name", "tag", "textTag", "alt", "placeholder", "inputType", "link"]);
@@ -144,6 +155,12 @@ export function validateProject(project: SerializedProject): ValidationResult {
       const child = project.nodes[childId];
       if (!child) errors.push(`Node ${id} references missing child ${childId}.`);
       else if (child.parent !== id) errors.push(`Node ${childId} parent does not point back to ${id}.`);
+    }
+    for (const breakpoint of BREAKPOINTS) {
+      const resolved = nodeStyles(node, project, breakpoint);
+      if ((resolved.gap ?? 0) < 0 && resolved.layout !== "stack") {
+        errors.push(`Node ${id} has negative gap at ${breakpoint}, but negative gap is supported only for stack layout.`);
+      }
     }
   }
 
@@ -369,6 +386,9 @@ function validateStylePatch(styles: Partial<StyleProps>) {
   }
   if (styles.direction && !["row", "column"].includes(styles.direction)) throw new Error(`Invalid stack direction ${styles.direction}.`);
   if (styles.fill && !["solid", "linear", "radial", "image"].includes(styles.fill.type)) throw new Error(`Invalid fill type ${styles.fill.type}.`);
+  if (styles.fill?.type === "radial" && styles.fill.anchor && !RADIAL_GRADIENT_ANCHORS.has(styles.fill.anchor)) {
+    throw new Error(`Invalid radial gradient anchor ${styles.fill.anchor}.`);
+  }
 }
 
 function validateAnimations(project: SerializedProject, errors: string[]) {
